@@ -73,4 +73,77 @@ export interface DailyFact {
   subject: Subject;
 }
 
-export type View = 'dashboard' | 'ledger' | 'analytics' | 'notes' | 'assignments' | 'strategy';
+export type View = 'dashboard' | 'ledger' | 'tests' | 'analytics' | 'notes' | 'assignments' | 'strategy';
+
+// ─── Test Tracker Types ───────────────────────────────────────────
+
+export type ExamPattern = 'single' | 'dual';
+export type TestSourceType = 'Mock Test' | 'PYQ/Previous Year Paper' | 'School Test' | 'Custom';
+
+export interface TemplateSubject {
+  id: string;
+  name: string;
+  numQuestions: number;
+  marksPerCorrect: number;
+  negativePerWrong: number;
+  partialMarking: boolean;
+}
+
+export interface ExamTemplate {
+  id: string;
+  name: string;
+  pattern: ExamPattern;
+  papers: TemplateSubject[][]; // 1 array for single, 2 arrays for dual
+  totalQuestions: number;
+  totalMaxMarks: number;
+  manualOverride: boolean;
+  createdAt: number;
+  timesUsed: number;
+}
+
+export interface SubjectScore {
+  subjectName: string;
+  correct: number;
+  incorrect: number;
+  unattempted: number;
+  score: number;
+  maxScore: number;
+  accuracy: number;
+}
+
+export interface PaperScore {
+  subjects: SubjectScore[];
+  totalScore: number;
+  maxScore: number;
+  totalCorrect: number;
+  totalIncorrect: number;
+  totalUnattempted: number;
+  totalQuestions: number;
+  accuracy: number;
+}
+
+export interface TestAttempt {
+  id: string;
+  templateId: string;
+  templateName: string;
+  pattern: ExamPattern;
+  testType: TestSourceType;
+  attemptName: string;
+  date: string;
+  timeTakenMinutes?: number;
+  difficultyRating?: number;
+  notes?: string;
+  papers: PaperScore[];
+  totalScore: number;
+  maxScore: number;
+  percentage: number;
+  accuracy: number;
+  totalCorrect: number;
+  totalIncorrect: number;
+  totalUnattempted: number;
+  totalQuestions: number;
+  marksLostToNegative: number;
+  percentile?: number;
+  targetAchieved: boolean;
+  createdAt: number;
+}

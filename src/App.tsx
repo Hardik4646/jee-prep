@@ -1,7 +1,7 @@
 import { useState, useCallback, Suspense, lazy } from 'react';
 import { Sidebar, BottomNav } from './components/Navigation';
 import { useLocalStorage } from './hooks/useLocalStorage';
-import { Mistake, ImportantNote, InorganicAssignment, GamificationState, View } from './types';
+import { Mistake, ImportantNote, InorganicAssignment, GamificationState, View, ExamTemplate, TestAttempt } from './types';
 import { dummyMistakes, dummyNotes, dummyAssignments } from './data/dummyData';
 import { getLevelFromXP } from './data/gamification';
 import { X, Settings } from 'lucide-react';
@@ -13,6 +13,7 @@ const AnalyticsDashboard = lazy(() => import('./components/AnalyticsDashboard').
 const JEEExamStrategy = lazy(() => import('./components/JEEExamStrategy').then(m => ({ default: m.JEEExamStrategy })));
 const ImportantNotes = lazy(() => import('./components/ImportantNotes').then(m => ({ default: m.ImportantNotes })));
 const AssignmentsTracker = lazy(() => import('./components/AssignmentsTracker').then(m => ({ default: m.AssignmentsTracker })));
+const TestTracker = lazy(() => import('./components/TestTracker').then(m => ({ default: m.TestTracker })));
 const AppSettings = lazy(() => import('./components/AppSettings').then(m => ({ default: m.AppSettings })));
 
 const DEFAULT_GAMIFICATION: GamificationState = {
@@ -36,6 +37,8 @@ export default function App() {
   const [mistakes, setMistakes] = useLocalStorage<Mistake[]>('jee-mistakes-v4', dummyMistakes);
   const [notes, setNotes] = useLocalStorage<ImportantNote[]>('jee-notes-v4', dummyNotes);
   const [assignments, setAssignments] = useLocalStorage<InorganicAssignment[]>('jee-assignments-v4', dummyAssignments);
+  const [testTemplates, setTestTemplates] = useLocalStorage<ExamTemplate[]>('jee-test-templates-v4', []);
+  const [testAttempts, setTestAttempts] = useLocalStorage<TestAttempt[]>('jee-test-attempts-v4', []);
   const [gamification, setGamification] = useLocalStorage<GamificationState>('jee-gamification-v4', DEFAULT_GAMIFICATION);
 
   const handleXP = useCallback((amount: number) => {
@@ -55,8 +58,10 @@ export default function App() {
     localStorage.setItem('jee-mistakes-v4', JSON.stringify([]));
     localStorage.setItem('jee-notes-v4', JSON.stringify([]));
     localStorage.setItem('jee-assignments-v4', JSON.stringify([]));
+    localStorage.setItem('jee-test-templates-v4', JSON.stringify([]));
+    localStorage.setItem('jee-test-attempts-v4', JSON.stringify([]));
     localStorage.setItem('jee-gamification-v4', JSON.stringify(DEFAULT_GAMIFICATION));
-    setMistakes([]); setNotes([]); setAssignments([]); setGamification(DEFAULT_GAMIFICATION);
+    setMistakes([]); setNotes([]); setAssignments([]); setTestTemplates([]); setTestAttempts([]); setGamification(DEFAULT_GAMIFICATION);
   };
 
   const handleImport = (data: { mistakes: Mistake[]; notes: ImportantNote[]; assignments: InorganicAssignment[] }) => {
@@ -69,6 +74,8 @@ export default function App() {
   const safeM = Array.isArray(mistakes) ? mistakes : [];
   const safeN = Array.isArray(notes) ? notes : [];
   const safeA = Array.isArray(assignments) ? assignments : [];
+  const safeT = Array.isArray(testTemplates) ? testTemplates : [];
+  const safeTA = Array.isArray(testAttempts) ? testAttempts : [];
   const safeG = (gamification as GamificationState) ?? DEFAULT_GAMIFICATION;
 
   return (
@@ -80,6 +87,7 @@ export default function App() {
           <Suspense fallback={<RouteLoader />}>
             {currentView === 'dashboard'    && <Dashboard mistakes={safeM} gamification={safeG} setCurrentView={setCurrentView} />}
             {currentView === 'ledger'       && <MistakeLedger mistakes={safeM} setMistakes={setMistakes} onXP={handleXP} />}
+            {currentView === 'tests'        && <TestTracker templates={safeT} setTemplates={setTestTemplates} attempts={safeTA} setAttempts={setTestAttempts} mistakes={safeM} setMistakes={setMistakes} onXP={handleXP} />}
             {currentView === 'analytics'   && <AnalyticsDashboard mistakes={safeM} />}
             {currentView === 'strategy'    && <JEEExamStrategy mistakes={safeM} setMistakes={setMistakes} />}
             {currentView === 'notes'       && <ImportantNotes notes={safeN} setNotes={setNotes} />}
