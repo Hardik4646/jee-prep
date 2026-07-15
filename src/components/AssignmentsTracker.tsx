@@ -1,5 +1,5 @@
 import { useState, useMemo, memo } from 'react';
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 import { Plus, X, Save, Trash2, ClipboardCheck, TrendingUp, Target, Award } from 'lucide-react';
 import { InorganicAssignment, AssignmentType } from '../types';
 import { format, parseISO } from 'date-fns';
@@ -58,6 +58,7 @@ const AccuracyBarChart = memo(({ data }: { data: { type: string; accuracy: numbe
         <Tooltip content={<ChartTip />} />
         <Bar dataKey="accuracy" name="Accuracy %" radius={[6, 6, 0, 0]} isAnimationActive={false}>
           {data.map((d, i) => <Cell key={i} fill={d.color} />)}
+          <LabelList dataKey="accuracy" position="top" style={{ fill: 'var(--text-tertiary)', fontSize: 10, fontWeight: 600 }} formatter={(v: any) => (typeof v === 'number' ? `${v}%` : '')} />
         </Bar>
       </BarChart>
     </ResponsiveContainer>

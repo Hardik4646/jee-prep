@@ -19,9 +19,10 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
   const [timeTaken, setTimeTaken] = useState('');
   const [difficulty, setDifficulty] = useState(0);
   const [notes, setNotes] = useState('');
-  const [entryMode, setEntryMode] = useState<'counts' | 'marks'>('counts');
+  const [entryMode, setEntryMode] = useState<'counts' | 'marks' | 'manual'>('counts');
   const [paperInputs, setPaperInputs] = useState<{ correct: string; incorrect: string; unattempted: string }[][]>([]);
   const [directMarks, setDirectMarks] = useState<string[]>([]);
+  const [manualInputs, setManualInputs] = useState<{ marksObtained: string; negativeMarks: string; correct: string; incorrect: string; unattempted: string }[][]>([]);
   const [percentile, setPercentile] = useState('');
   const [targetScore, setTargetScore] = useState('');
   const [addToLedger, setAddToLedger] = useState(false);
@@ -35,6 +36,8 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
     setTemplateId(id);
     setPaperInputs(tpl.papers.map(paper => paper.map(() => ({ correct: '', incorrect: '', unattempted: '' }))));
     setDirectMarks(tpl.papers.map(() => ''));
+    setManualInputs(tpl.papers.map(paper => paper.map(() => ({ marksObtained: '', negativeMarks: '', correct: '', incorrect: '', unattempted: '' }))));
+    setEntryMode(tpl.marksPreset ? 'counts' : 'manual');
     setTargetScore('');
   };
 
@@ -50,6 +53,33 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
           totalQuestions: paper.reduce((a, s) => a + s.numQuestions, 0), accuracy: 0,
         };
       }
+      if (entryMode === 'manual') {
+        const inputs = manualInputs[pi] ?? [];
+        const subjScores = paper.map((s, si) => {
+          const inp = inputs[si] ?? { marksObtained: '', negativeMarks: '', correct: '', incorrect: '', unattempted: '' };
+          const score = parseFloat(inp.marksObtained) || 0;
+          const neg = parseFloat(inp.negativeMarks) || 0;
+          const correct = parseInt(inp.correct) || 0;
+          const incorrect = parseInt(inp.incorrect) || 0;
+          const unattempted = parseInt(inp.unattempted) || 0;
+          const maxScore = s.numQuestions * s.marksPerCorrect;
+          const attempted = correct + incorrect;
+          const accuracy = attempted > 0 ? (correct / attempted) * 100 : 0;
+          return { subjectName: s.name, correct, incorrect, unattempted, score: score - neg, maxScore, accuracy };
+        });
+        return {
+          subjects: subjScores,
+          totalScore: subjScores.reduce((a, b) => a + b.score, 0),
+          maxScore: subjScores.reduce((a, b) => a + b.maxScore, 0),
+          totalCorrect: subjScores.reduce((a, b) => a + b.correct, 0),
+          totalIncorrect: subjScores.reduce((a, b) => a + b.incorrect, 0),
+          totalUnattempted: subjScores.reduce((a, b) => a + b.unattempted, 0),
+          totalQuestions: paper.reduce((a, s) => a + s.numQuestions, 0),
+          accuracy: subjScores.reduce((a, b) => a + b.correct, 0) + subjScores.reduce((a, b) => a + b.incorrect, 0) > 0
+            ? (subjScores.reduce((a, b) => a + b.correct, 0) / (subjScores.reduce((a, b) => a + b.correct, 0) + subjScores.reduce((a, b) => a + b.incorrect, 0))) * 100
+            : 0,
+        };
+      }
       const inputs = paperInputs[pi] ?? [];
       return computePaperScore(paper, inputs.map(i => ({
         correct: parseInt(i?.correct ?? '') || 0,
@@ -57,7 +87,7 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
         unattempted: parseInt(i?.unattempted ?? '') || 0,
       })));
     });
-  }, [template, paperInputs, directMarks, entryMode]);
+  }, [template, paperInputs, directMarks, manualInputs, entryMode]);
 
   const liveTotal = livePapers.reduce((a, p) => a + p.totalScore, 0);
   const liveMax = livePapers.reduce((a, p) => a + p.maxScore, 0);
@@ -71,6 +101,14 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
   const liveMarksLost = useMemo(() => {
     if (!template) return 0;
     let lost = 0;
+    if (entryMode === 'manual') {
+      template.papers.forEach((paper, pi) => {
+        (manualInputs[pi] ?? []).forEach((inp) => {
+          lost += parseFloat(inp?.negativeMarks ?? '') || 0;
+        });
+      });
+      return lost;
+    }
     template.papers.forEach((paper, pi) => {
       paper.forEach((s, si) => {
         const inc = parseInt(paperInputs[pi]?.[si]?.incorrect ?? '') || 0;
@@ -78,7 +116,7 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
       });
     });
     return lost;
-  }, [template, paperInputs]);
+  }, [template, paperInputs, manualInputs, entryMode]);
 
   const target = parseFloat(targetScore) || 0;
   const achieved = target > 0 && liveTotal >= target;
@@ -190,11 +228,15 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
         <div className="space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <span className="section-label">Score Entry</span>
-            <div className="flex gap-1" style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-button)', padding: 3 }}>
-              {(['counts', 'marks'] as const).map(m => (
-                <button key={m} onClick={() => setEntryMode(m)} style={{ padding: '6px 12px', borderRadius: 'var(--radius-button)', fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none', background: entryMode === m ? 'var(--accent)' : 'transparent', color: entryMode === m ? '#fff' : 'var(--text-tertiary)' }}>{m === 'counts' ? 'By Counts' : 'Direct Marks'}</button>
-              ))}
-            </div>
+            {template.marksPreset ? (
+              <div style={{ padding: '6px 12px', borderRadius: 'var(--radius-button)', fontSize: 11, fontWeight: 600, background: 'var(--accent-muted-bg)', color: 'var(--accent)', border: '1px solid rgba(79,107,255,0.2)' }}>Auto-calc from counts</div>
+            ) : (
+              <div className="flex gap-1" style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-button)', padding: 3 }}>
+                {(['counts', 'marks', 'manual'] as const).map(m => (
+                  <button key={m} onClick={() => setEntryMode(m)} style={{ padding: '6px 12px', borderRadius: 'var(--radius-button)', fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none', background: entryMode === m ? 'var(--accent)' : 'transparent', color: entryMode === m ? '#fff' : 'var(--text-tertiary)' }}>{m === 'counts' ? 'By Counts' : m === 'marks' ? 'Direct Marks' : 'Manual'}</button>
+                ))}
+              </div>
+            )}
           </div>
 
           {template.papers.map((paper, pi) => (
@@ -222,13 +264,37 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
                     );
                   })}
                 </div>
+              ) : entryMode === 'manual' ? (
+                <div className="space-y-2">
+                  {paper.map((s, si) => {
+                    const inp = manualInputs[pi]?.[si] ?? { marksObtained: '', negativeMarks: '', correct: '', incorrect: '', unattempted: '' };
+                    const score = (parseFloat(inp.marksObtained) || 0) - (parseFloat(inp.negativeMarks) || 0);
+                    const maxScore = s.numQuestions * s.marksPerCorrect;
+                    return (
+                      <div key={s.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end" style={{ padding: '10px 12px', background: 'var(--bg-surface)', borderRadius: 'var(--radius-button)', border: '1px solid var(--border-subtle)' }}>
+                        <div className="md:col-span-3">
+                          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{s.name}</p>
+                          <p style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{s.numQuestions}Q · Max {maxScore}</p>
+                        </div>
+                        <div className="md:col-span-2"><label className="field-label" style={{ marginBottom: 3 }}>Marks Got</label><input type="number" step="0.5" className="field" style={{ padding: '7px 10px', fontSize: 13 }} value={inp.marksObtained} onChange={e => { const np = [...manualInputs]; np[pi] = [...(np[pi] ?? [])]; np[pi][si] = { ...inp, marksObtained: e.target.value }; setManualInputs(np); }} min={0} /></div>
+                        <div className="md:col-span-2"><label className="field-label" style={{ marginBottom: 3 }}>Neg. Marks</label><input type="number" step="0.5" className="field" style={{ padding: '7px 10px', fontSize: 13 }} value={inp.negativeMarks} onChange={e => { const np = [...manualInputs]; np[pi] = [...(np[pi] ?? [])]; np[pi][si] = { ...inp, negativeMarks: e.target.value }; setManualInputs(np); }} min={0} /></div>
+                        <div className="md:col-span-2"><label className="field-label" style={{ marginBottom: 3 }}>Correct</label><input type="number" className="field" style={{ padding: '7px 10px', fontSize: 13 }} value={inp.correct} onChange={e => { const np = [...manualInputs]; np[pi] = [...(np[pi] ?? [])]; np[pi][si] = { ...inp, correct: e.target.value }; setManualInputs(np); }} min={0} /></div>
+                        <div className="md:col-span-1"><label className="field-label" style={{ marginBottom: 3 }}>Wrong</label><input type="number" className="field" style={{ padding: '7px 10px', fontSize: 13 }} value={inp.incorrect} onChange={e => { const np = [...manualInputs]; np[pi] = [...(np[pi] ?? [])]; np[pi][si] = { ...inp, incorrect: e.target.value }; setManualInputs(np); }} min={0} /></div>
+                        <div className="md:col-span-2" style={{ textAlign: 'right' }}>
+                          <p style={{ fontSize: 16, fontWeight: 700, color: score >= 0 ? 'var(--success)' : 'var(--danger)' }}>{score.toFixed(1)}</p>
+                          <p style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>of {maxScore}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               ) : (
                 <div>
                   <label className="field-label">Total Marks for Paper {pi + 1}</label>
                   <input type="number" step="0.5" className="field" style={{ fontSize: 18, fontWeight: 700 }} value={directMarks[pi] ?? ''} onChange={e => { const nd = [...directMarks]; nd[pi] = e.target.value; setDirectMarks(nd); }} placeholder={`Max: ${paper.reduce((a, s) => a + s.numQuestions * s.marksPerCorrect, 0)}`} />
                 </div>
               )}
-              {entryMode === 'counts' && (
+              {(entryMode === 'counts' || entryMode === 'manual') && (
                 <div className="flex items-center justify-between mt-3" style={{ paddingTop: 10, borderTop: '1px solid var(--border-subtle)' }}>
                   <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Paper {pi + 1} Subtotal</span>
                   <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{livePapers[pi]?.totalScore.toFixed(1)} / {livePapers[pi]?.maxScore.toFixed(0)}</span>

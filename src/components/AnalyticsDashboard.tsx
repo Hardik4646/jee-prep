@@ -2,7 +2,7 @@ import { useMemo, useState, memo } from 'react';
 import {
   AreaChart, Area, BarChart, Bar, ScatterChart, Scatter,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  Cell, PieChart, Pie, ReferenceLine,
+  Cell, PieChart, Pie, ReferenceLine, LabelList,
 } from 'recharts';
 import { TrendingUp, AlertTriangle, CheckCircle2, Flame, ChevronDown, Clock } from 'lucide-react';
 import { Mistake, Subject, ErrorCategory } from '../types';
@@ -80,7 +80,9 @@ const ChapterBarChart = memo(({ data }: { data: { name: string; active: number; 
         <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }} stroke="transparent" width={72} />
         <Tooltip content={<ChartTip />} />
         <Bar dataKey="active" name="Active" stackId="a" fill="var(--warning)" radius={[0, 0, 0, 0]} isAnimationActive={false} />
-        <Bar dataKey="mastered" name="Mastered" stackId="a" fill="var(--success)" radius={[0, 6, 6, 0]} isAnimationActive={false} />
+        <Bar dataKey="mastered" name="Mastered" stackId="a" fill="var(--success)" radius={[0, 6, 6, 0]} isAnimationActive={false}>
+          <LabelList dataKey="mastered" position="right" style={{ fill: 'var(--text-tertiary)', fontSize: 10, fontWeight: 600 }} formatter={(v: any) => (typeof v === 'number' && v > 0 ? `+${v}` : '') } />
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   </div>
@@ -115,6 +117,7 @@ type TrendMode = 'weekly' | 'monthly';
 export function AnalyticsDashboard({ mistakes, onFilterLedger }: AnalyticsDashboardProps) {
   const [trendMode, setTrendMode] = useState<TrendMode>('weekly');
   const [subjectFilter, setSubjectFilter] = useState<Subject | 'all'>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   const valid = Array.isArray(mistakes) ? mistakes : [];
   const filtered = useMemo(() => subjectFilter === 'all' ? valid : valid.filter(m => m.subject === subjectFilter), [valid, subjectFilter]);
@@ -272,8 +275,8 @@ export function AnalyticsDashboard({ mistakes, onFilterLedger }: AnalyticsDashbo
               <div style={{ height: nonZeroCategories.length === 1 ? 100 : 140 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={nonZeroCategories} cx="50%" cy="50%" innerRadius={nonZeroCategories.length === 1 ? 32 : 42} outerRadius={nonZeroCategories.length === 1 ? 48 : 64} paddingAngle={nonZeroCategories.length === 1 ? 0 : 3} dataKey="value">
-                      {nonZeroCategories.map((e, i) => <Cell key={i} fill={e.color} stroke="transparent" />)}
+                    <Pie data={nonZeroCategories} cx="50%" cy="50%" innerRadius={nonZeroCategories.length === 1 ? 32 : 42} outerRadius={nonZeroCategories.length === 1 ? 48 : 64} paddingAngle={nonZeroCategories.length === 1 ? 0 : 3} dataKey="value" onClick={(_, i) => { const cat = nonZeroCategories[i]; setSelectedCategory(selectedCategory === cat.name ? null : cat.name); }} cursor="pointer">
+                      {nonZeroCategories.map((e, i) => <Cell key={i} fill={e.color} stroke={selectedCategory === e.name ? 'var(--text-primary)' : 'transparent'} strokeWidth={selectedCategory === e.name ? 2 : 0} style={{ opacity: selectedCategory && selectedCategory !== e.name ? 0.4 : 1, transition: 'opacity 200ms' }} />)}
                     </Pie>
                     <Tooltip content={<ChartTip />} />
                   </PieChart>
@@ -281,7 +284,7 @@ export function AnalyticsDashboard({ mistakes, onFilterLedger }: AnalyticsDashbo
               </div>
               <div className="space-y-2 mt-3">
                 {categoryData.map(e => (
-                  <div key={e.name} className="flex items-center justify-between gap-2">
+                  <div key={e.name} onClick={() => { if (e.value > 0) setSelectedCategory(selectedCategory === e.name ? null : e.name); }} style={{ cursor: e.value > 0 ? 'pointer' : 'default', padding: '4px 8px', borderRadius: 'var(--radius-button)', background: selectedCategory === e.name ? 'var(--accent-muted-bg)' : 'transparent', border: '1px solid', borderColor: selectedCategory === e.name ? 'rgba(79,107,255,0.2)' : 'transparent', transition: 'all 150ms' }} className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: e.color, opacity: e.value > 0 ? 1 : 0.3 }} />
                       <span style={{ fontSize: 12, color: e.value > 0 ? 'var(--text-secondary)' : 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.name}</span>
@@ -290,6 +293,12 @@ export function AnalyticsDashboard({ mistakes, onFilterLedger }: AnalyticsDashbo
                   </div>
                 ))}
               </div>
+              {selectedCategory && (
+                <div className="flex items-center justify-between mt-3" style={{ padding: '8px 12px', background: 'var(--accent-muted-bg)', borderRadius: 'var(--radius-button)', border: '1px solid rgba(79,107,255,0.2)' }}>
+                  <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>Filtered: {selectedCategory}</span>
+                  <button onClick={() => setSelectedCategory(null)} className="btn-ghost" style={{ padding: '4px 8px', fontSize: 11 }}>Clear</button>
+                </div>
+              )}
             </>
           ) : (
             <div style={{ height: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>

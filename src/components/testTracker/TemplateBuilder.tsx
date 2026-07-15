@@ -18,6 +18,7 @@ export function TemplateBuilder({ onSave, onCancel, editing }: TemplateBuilderPr
   const [manualOverride, setManualOverride] = useState(editing?.manualOverride ?? false);
   const [manualQuestions, setManualQuestions] = useState(editing?.totalQuestions ?? 0);
   const [manualMarks, setManualMarks] = useState(editing?.totalMaxMarks ?? 0);
+  const [marksPreset, setMarksPreset] = useState(editing?.marksPreset ?? true);
 
   const updatePaper = (pi: number, fn: (p: TemplateSubject[]) => TemplateSubject[]) => {
     setPapers(prev => prev.map((p, i) => i === pi ? fn(p) : p));
@@ -50,7 +51,7 @@ export function TemplateBuilder({ onSave, onCancel, editing }: TemplateBuilderPr
     if (!canSave) return;
     onSave({
       id: editing?.id ?? genId(), name: name.trim(), pattern, papers,
-      totalQuestions, totalMaxMarks, manualOverride,
+      totalQuestions, totalMaxMarks, manualOverride, marksPreset,
       createdAt: editing?.createdAt ?? Date.now(), timesUsed: editing?.timesUsed ?? 0,
     });
   };
@@ -141,6 +142,16 @@ export function TemplateBuilder({ onSave, onCancel, editing }: TemplateBuilderPr
             <button onClick={() => { setManualOverride(!manualOverride); if (!manualOverride) { setManualQuestions(auto.tq); setManualMarks(auto.tm); } }}
               style={{ padding: '5px 10px', borderRadius: 'var(--radius-badge)', fontSize: 10, fontWeight: 600, cursor: 'pointer', border: '1px solid', borderColor: manualOverride ? 'rgba(79,107,255,0.4)' : 'var(--border-subtle)', background: manualOverride ? 'var(--accent-muted-bg)' : 'var(--bg-surface)', color: manualOverride ? 'var(--accent)' : 'var(--text-tertiary)' }}>
               Manual Override
+            </button>
+          </div>
+          <div className="flex items-center justify-between mb-3" style={{ paddingBottom: 12, borderBottom: '1px solid var(--border-subtle)' }}>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Marks Preset</p>
+              <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{marksPreset ? 'Auto-calculate scores from marks-per-question' : 'Manual entry of marks obtained, neg. marks, correct/wrong/attempted'}</p>
+            </div>
+            <button onClick={() => setMarksPreset(!marksPreset)}
+              style={{ width: 44, height: 24, borderRadius: 999, border: '1px solid', borderColor: marksPreset ? 'rgba(79,107,255,0.4)' : 'var(--border-subtle)', background: marksPreset ? 'var(--accent)' : 'var(--bg-surface)', position: 'relative', cursor: 'pointer', transition: 'all 200ms', flexShrink: 0 }}>
+              <div style={{ position: 'absolute', top: 2, left: marksPreset ? 22 : 2, width: 18, height: 18, borderRadius: '50%', background: marksPreset ? '#fff' : 'var(--text-tertiary)', transition: 'all 200ms' }} />
             </button>
           </div>
           <div className="grid grid-cols-2 gap-3">
