@@ -1,7 +1,7 @@
 import { useState, useMemo, memo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceDot, Label } from 'recharts';
 import type { TooltipContentProps, ValueType, NameType } from 'recharts';
-import { ClipboardList, TrendingUp, Award, Target, BarChart3, AlertTriangle, Calculator, X } from 'lucide-react';
+import { ClipboardList, TrendingUp, Award, Target, BarChart3, AlertTriangle, Calculator, X, Sparkles } from 'lucide-react';
 import { ExamTemplate, TestAttempt, SubjectScore } from '../../types';
 import { format, parseISO } from 'date-fns';
 
@@ -419,30 +419,60 @@ export function TestAnalytics({ attempts, templates }: { attempts: TestAttempt[]
     if (filtered.length < 2) return null;
     const subjectNames = new Set<string>();
     filtered.forEach(a => a.papers.forEach(p => p.subjects.forEach(s => subjectNames.add(s.subjectName))));
-    const subjectStats: Record<string, { scores: number[]; accuracies: number[] }> = {};
-    subjectNames.forEach(sn => { subjectStats[sn] = { scores: [], accuracies: [] }; });
+    const subjectStats: Record<string, { scores: number[]; accuracies: number[]; maxScores: number[] }> = {};
+    subjectNames.forEach(sn => { subjectStats[sn] = { scores: [], accuracies: [], maxScores: [] }; });
     filtered.forEach(a => a.papers.forEach(p => p.subjects.forEach(s => {
-      if (subjectStats[s.subjectName]) { subjectStats[s.subjectName].scores.push(s.score); subjectStats[s.subjectName].accuracies.push(s.accuracy); }
+      if (subjectStats[s.subjectName]) { subjectStats[s.subjectName].scores.push(s.score); subjectStats[s.subjectName].accuracies.push(s.accuracy); subjectStats[s.subjectName].maxScores.push(s.maxScore); }
     })));
     const entries = Object.entries(subjectStats).filter(([, v]) => v.scores.length > 0);
     if (!entries.length) return null;
     const avg = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length;
     const variance = (arr: number[]) => { const m = avg(arr); return arr.reduce((s, v) => s + (v - m) ** 2, 0) / arr.length; };
     const slope = (arr: number[]) => { const n = arr.length; if (n < 2) return 0; const xs = arr.map((_, i) => i); const mx = avg(xs), my = avg(arr); return xs.reduce((s, x, i) => s + (x - mx) * (arr[i] - my), 0) / xs.reduce((s, x) => s + (x - mx) ** 2, 0); };
-    const ranked = entries.map(([name, v]) => ({ name, avgScore: avg(v.scores), variance: variance(v.scores), slope: slope(v.scores) }));
+    // Use accuracy% (not raw score) to rank subjects so it's comparable across subjects with different max marks.
+    const ranked = entries.map(([name, v]) => ({ name, avgScore: avg(v.accuracies), avgAccuracy: avg(v.accuracies), variance: variance(v.accuracies), slope: slope(v.accuracies), attempts: v.accuracies.length }));
     return {
       strongest: [...ranked].sort((a, b) => b.avgScore - a.avgScore)[0],
       weakest: [...ranked].sort((a, b) => a.avgScore - b.avgScore)[0],
-      mostImproved: [...ranked].sort((a, b) => b.slope - a.slope)[0],
-      mostConsistent: [...ranked].sort((a, b) => a.variance - b.variance)[0],
+      mostImproved: [...ranked].filter(r => r.attempts >= 2).sort((a, b) => b.slope - a.slope)[0] ?? null,
+      mostConsistent: [...ranked].filter(r => r.attempts >= 2).sort((a, b) => a.variance - b.variance)[0] ?? null,
     };
   }, [filtered]);
 
-  const kpis = [
-    { label: 'Tests Taken', value: stats.total, color: 'var(--accent)', bg: 'var(--accent-muted-bg)', icon: ClipboardList },
-    { label: 'Avg Percentage', value: `${stats.avgPct.toFixed(1)}%`, color: 'var(--info)', bg: 'var(--info-bg)', icon: TrendingUp },
-    { label: 'Best Score', value: `${stats.best.toFixed(1)}%`, color: 'var(--success)', bg: 'var(--success-bg)', icon: Award },
-    { label: 'Target Rate', value: `${stats.targetRate.toFixed(0)}%`, color: 'var(--warning)', bg: 'var(--warning-bg)', icon: Target },
+  // Narrative coaching summary — synthesizes the raw stats above into plain-language,
+  // actionable sentences instead of just showing numbers with no interpretation.
+  const narrative = useMemo(() => {
+    if (filtered.length < 2 || !insights) return null;
+    const pctArr = filtered.map(a => a.percentage);
+    const n = pctArr.length;
+    const xs = pctArr.map((_, i) => i);
+    const avg = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
+    const mx = avg(xs), my = avg(pctArr);
+    const den = xs.reduce((s, x) => s + (x - mx) ** 2, 0);
+    const overallSlope = den === 0 ? 0 : xs.reduce((s, x, i) => s + (x - mx) * (pctArr[i] - my), 0) / den;
+
+    const direction: 'up' | 'down' | 'flat' = overallSlope > 0.4 ? 'up' : overallSlope < -0.4 ? 'down' : 'flat';
+    const gap = insights.strongest.avgScore - insights.weakest.avgScore;
+
+    const totalNegLost = filtered.reduce((s, a) => s + a.marksLostToNegative, 0);
+    const totalMax = filtered.reduce((s, a) => s + a.maxScore, 0);
+    const negPctOfMax = totalMax > 0 ? (totalNegLost / totalMax) * 100 : 0;
+
+    const withTargets = filtered.filter(a => a.targetAchieved !== undefined);
+    const targetRate = withTargets.length > 0 ? (withTargets.filter(a => a.targetAchieved).length / withTargets.length) * 100 : null;
+
+    const last = filtered[n - 1];
+    const prev = filtered[n - 2];
+    const lastDelta = last.percentage - prev.percentage;
+
+    return { direction, slope: overallSlope, gap, totalNegLost, negPctOfMax, targetRate, lastDelta, last, n };
+  }, [filtered, insights]);
+
+  const kpis: { label: string; value: string | number; sub?: string; subColor?: string; color: string; bg: string; icon: typeof ClipboardList }[] = [
+    { label: 'Tests Taken', value: stats.total, sub: filtered.length > 0 ? `Latest: ${format(parseISO(filtered[filtered.length - 1].date), 'MMM d')}` : undefined, subColor: undefined, color: 'var(--accent)', bg: 'var(--accent-muted-bg)', icon: ClipboardList },
+    { label: 'Avg Percentage', value: `${stats.avgPct.toFixed(1)}%`, sub: narrative ? `${narrative.lastDelta >= 0 ? '▲' : '▼'} ${Math.abs(narrative.lastDelta).toFixed(1)} pts vs last test` : undefined, subColor: narrative ? (narrative.lastDelta >= 0 ? 'var(--success)' : 'var(--danger)') : undefined, color: 'var(--info)', bg: 'var(--info-bg)', icon: TrendingUp },
+    { label: 'Best Score', value: `${stats.best.toFixed(1)}%`, sub: `${(stats.best - stats.avgPct).toFixed(1)} pts above your average`, subColor: undefined, color: 'var(--success)', bg: 'var(--success-bg)', icon: Award },
+    { label: 'Target Rate', value: `${stats.targetRate.toFixed(0)}%`, sub: stats.targetRate < 50 && filtered.some(a => a.targetAchieved !== undefined) ? 'Below halfway — review target' : undefined, subColor: undefined, color: 'var(--warning)', bg: 'var(--warning-bg)', icon: Target },
   ];
 
   const chartModes: { id: ChartMode; label: string }[] = [
@@ -491,6 +521,7 @@ export function TestAnalytics({ attempts, templates }: { attempts: TestAttempt[]
               <div className="w-10 h-10 rounded-[10px] flex items-center justify-center mb-4" style={{ background: k.bg, border: `1px solid ${k.color}30` }}><Icon size={18} style={{ color: k.color }} /></div>
               <div className="stat-number">{k.value}</div>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginTop: 6 }}>{k.label}</div>
+              {k.sub && <div style={{ fontSize: 11, color: k.subColor ?? 'var(--text-tertiary)', marginTop: 4 }}>{k.sub}</div>}
             </div>
           );
         })}
@@ -572,16 +603,67 @@ export function TestAnalytics({ attempts, templates }: { attempts: TestAttempt[]
         )}
       </div>
 
+      {/* Coach's Notes — plain-language synthesis instead of raw label/value stat cards.
+          This is the direct answer to "what should I actually do next", not just numbers. */}
+      {narrative && insights && (
+        <div className="card" style={{ padding: 24 }}>
+          <div className="flex items-center gap-2" style={{ marginBottom: 14 }}>
+            <div className="w-8 h-8 rounded-[10px] flex items-center justify-center flex-shrink-0"
+              style={{ background: 'var(--accent-muted-bg)', border: '1px solid rgba(79,107,255,0.2)' }}>
+              <Sparkles size={15} style={{ color: 'var(--accent)' }} />
+            </div>
+            <p className="card-title">Coach's Notes</p>
+          </div>
+          <div style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--text-secondary)' }}>
+            <p style={{ marginBottom: 10 }}>
+              Over your last {narrative.n} attempts, your score is{' '}
+              <strong style={{ color: narrative.direction === 'up' ? 'var(--success)' : narrative.direction === 'down' ? 'var(--danger)' : 'var(--text-primary)' }}>
+                {narrative.direction === 'up' ? 'trending upward' : narrative.direction === 'down' ? 'trending downward' : 'holding roughly steady'}
+              </strong>
+              {narrative.direction !== 'flat' && ` (about ${Math.abs(narrative.slope).toFixed(1)} points per test ${narrative.direction === 'up' ? 'gained' : 'lost'})`}.
+              {' '}Your most recent test ({narrative.last.attemptName}) was{' '}
+              <strong style={{ color: narrative.lastDelta >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                {narrative.lastDelta >= 0 ? `+${narrative.lastDelta.toFixed(1)}` : narrative.lastDelta.toFixed(1)} points
+              </strong>{' '}vs the one before it.
+            </p>
+            <p style={{ marginBottom: 10 }}>
+              <strong style={{ color: 'var(--success)' }}>{insights.strongest.name}</strong> is your strongest subject at{' '}
+              {insights.strongest.avgAccuracy.toFixed(0)}% average accuracy, while{' '}
+              <strong style={{ color: 'var(--danger)' }}>{insights.weakest.name}</strong> is lagging at{' '}
+              {insights.weakest.avgAccuracy.toFixed(0)}% — a {narrative.gap.toFixed(0)}-point gap.
+              {narrative.gap > 15 && ` That gap is large enough to be costing you real rank — prioritize ${insights.weakest.name} in your next study block.`}
+              {insights.mostImproved && insights.mostImproved.name !== insights.strongest.name && insights.mostImproved.slope > 0.5 && (
+                <> On the bright side, <strong style={{ color: 'var(--accent)' }}>{insights.mostImproved.name}</strong> is climbing the fastest — whatever you changed there is working.</>
+              )}
+            </p>
+            {narrative.negPctOfMax > 3 && (
+              <p style={{ marginBottom: 10 }}>
+                Negative marking has cost you <strong style={{ color: 'var(--danger)' }}>{narrative.totalNegLost.toFixed(1)} marks</strong> across
+                these attempts (~{narrative.negPctOfMax.toFixed(1)}% of total possible marks). That's often a sign of guessing on questions you're not sure about —
+                tightening up when you choose to attempt vs. skip could be worth more than studying a new topic right now.
+              </p>
+            )}
+            {narrative.targetRate !== null && (
+              <p>
+                You're hitting your target score on <strong style={{ color: narrative.targetRate >= 50 ? 'var(--success)' : 'var(--warning)' }}>
+                  {narrative.targetRate.toFixed(0)}% of tests
+                </strong>{narrative.targetRate < 50 ? ' — worth revisiting whether the target is realistic yet, or where marks are consistently slipping.' : '. Keep this up.'}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {insights && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="card" style={{ padding: 24 }}>
-            <p className="card-title" style={{ marginBottom: 16 }}>Comparative Insights</p>
+            <p className="card-title" style={{ marginBottom: 16 }}>Subject Breakdown</p>
             <div className="space-y-3">
               {[
-                { label: 'Strongest Subject', value: insights.strongest.name, sub: `${insights.strongest.avgScore.toFixed(1)} avg`, color: 'var(--success)', bg: 'var(--success-bg)', icon: Award },
-                { label: 'Weakest Subject', value: insights.weakest.name, sub: `${insights.weakest.avgScore.toFixed(1)} avg`, color: 'var(--danger)', bg: 'var(--danger-bg)', icon: AlertTriangle },
-                { label: 'Most Improved', value: insights.mostImproved.name, sub: `slope +${insights.mostImproved.slope.toFixed(2)}`, color: 'var(--accent)', bg: 'var(--accent-muted-bg)', icon: TrendingUp },
-                { label: 'Most Consistent', value: insights.mostConsistent.name, sub: `variance ${insights.mostConsistent.variance.toFixed(1)}`, color: 'var(--info)', bg: 'var(--info-bg)', icon: Calculator },
+                { label: 'Strongest Subject', value: insights.strongest.name, sub: `${insights.strongest.avgAccuracy.toFixed(0)}% acc`, color: 'var(--success)', bg: 'var(--success-bg)', icon: Award },
+                { label: 'Weakest Subject', value: insights.weakest.name, sub: `${insights.weakest.avgAccuracy.toFixed(0)}% acc`, color: 'var(--danger)', bg: 'var(--danger-bg)', icon: AlertTriangle },
+                ...(insights.mostImproved ? [{ label: 'Most Improved', value: insights.mostImproved.name, sub: `+${insights.mostImproved.slope.toFixed(1)} pts/test`, color: 'var(--accent)', bg: 'var(--accent-muted-bg)', icon: TrendingUp }] : []),
+                ...(insights.mostConsistent ? [{ label: 'Most Consistent', value: insights.mostConsistent.name, sub: `±${Math.sqrt(insights.mostConsistent.variance).toFixed(1)}% swing`, color: 'var(--info)', bg: 'var(--info-bg)', icon: Calculator }] : []),
               ].map(item => {
                 const Icon = item.icon;
                 return (
