@@ -120,7 +120,7 @@ export function AppSettings({ mistakes, notes, assignments, onReset, onImport, o
       )}
 
       <div style={{ padding: '12px 14px', borderRadius: 'var(--radius-card)', display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
-        <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-button)', background: 'var(--accent-muted-bg)', border: '1px solid rgba(79,107,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-button)', background: 'var(--accent-muted-bg)', border: '1px solid rgba(13,148,136,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <Database size={15} style={{ color: 'var(--accent)' }} />
         </div>
         <div>
@@ -129,7 +129,7 @@ export function AppSettings({ mistakes, notes, assignments, onReset, onImport, o
         </div>
       </div>
 
-      <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-card)', background: 'var(--accent-muted-bg)', border: '1px solid rgba(79,107,255,0.15)' }}>
+      <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-card)', background: 'var(--accent-muted-bg)', border: '1px solid rgba(13,148,136,0.15)' }}>
         <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>EXPORT FORMAT v4.0</p>
         <p style={{ fontSize: 10, color: 'var(--text-tertiary)', lineHeight: 1.6, fontFamily: 'monospace' }}>{'{ version, exportDate, mistakes[], notes[], assignments[] }'}</p>
       </div>

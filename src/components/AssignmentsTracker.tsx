@@ -11,7 +11,7 @@ interface AssignmentsTrackerProps {
 
 const TYPES: AssignmentType[] = ['CSC', 'TFT', 'Other'];
 const TYPE_COLORS: Record<AssignmentType, { hex: string; bg: string; border: string; text: string }> = {
-  CSC:   { hex: '#4F6BFF', bg: 'rgba(79,107,255,0.12)',  border: 'rgba(79,107,255,0.25)',  text: '#4F6BFF' },
+  CSC:   { hex: '#FB923C', bg: 'rgba(251,146,60,0.12)',  border: 'rgba(251,146,60,0.25)',  text: '#FB923C' },
   TFT:   { hex: '#22C55E', bg: 'rgba(34,197,94,0.12)',   border: 'rgba(34,197,94,0.25)',   text: '#22C55E' },
   Other: { hex: '#F5A623', bg: 'rgba(245,166,35,0.12)',  border: 'rgba(245,166,35,0.25)',  text: '#F5A623' },
 };

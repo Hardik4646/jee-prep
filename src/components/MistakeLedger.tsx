@@ -19,7 +19,7 @@ const PRIORITIES: Priority[] = ['High', 'Medium', 'Low'];
 
 const SUBJECT_COLORS: Record<Subject, { hex: string; bg: string; border: string; text: string }> = {
   Physics:               { hex: '#38BDF8', bg: 'rgba(56,189,248,0.12)',  border: 'rgba(56,189,248,0.25)',  text: '#38BDF8' },
-  Mathematics:           { hex: '#4F6BFF', bg: 'rgba(79,107,255,0.12)',  border: 'rgba(79,107,255,0.25)',  text: '#4F6BFF' },
+  Mathematics:           { hex: '#FB923C', bg: 'rgba(251,146,60,0.12)',  border: 'rgba(251,146,60,0.25)',  text: '#FB923C' },
   'Physical Chemistry':  { hex: '#F5A623', bg: 'rgba(245,166,35,0.12)',  border: 'rgba(245,166,35,0.25)',  text: '#F5A623' },
   'Organic Chemistry':   { hex: '#22C55E', bg: 'rgba(34,197,94,0.12)',   border: 'rgba(34,197,94,0.25)',   text: '#22C55E' },
   'Inorganic Chemistry': { hex: '#F5455C', bg: 'rgba(245,69,92,0.12)',   border: 'rgba(245,69,92,0.25)',   text: '#F5455C' },
@@ -29,7 +29,7 @@ const CATEGORY_COLORS: Record<ErrorCategory, { bg: string; text: string; border:
   'Calculation':            { bg: 'rgba(245,166,35,0.12)',  text: '#F5A623', border: 'rgba(245,166,35,0.25)' },
   'Conceptual Gap':         { bg: 'rgba(56,189,248,0.12)',  text: '#38BDF8', border: 'rgba(56,189,248,0.25)' },
   'Formula Misapplication': { bg: 'rgba(245,69,92,0.12)',   text: '#F5455C', border: 'rgba(245,69,92,0.25)' },
-  'Question Misread':       { bg: 'rgba(79,107,255,0.12)',  text: '#4F6BFF', border: 'rgba(79,107,255,0.25)' },
+  'Question Misread':       { bg: 'rgba(251,146,60,0.12)',  text: '#FB923C', border: 'rgba(251,146,60,0.25)' },
   'Careless/Silly':         { bg: 'rgba(34,197,94,0.12)',   text: '#22C55E', border: 'rgba(34,197,94,0.25)' },
 };
 
@@ -210,7 +210,7 @@ export function MistakeLedger({ mistakes, setMistakes, onXP }: MistakeLedgerProp
                 className="field" style={{ paddingLeft: 36, paddingTop: 9, paddingBottom: 9 }} />
             </div>
             <button onClick={() => setShowFilters(!showFilters)} className="btn-ghost"
-              style={{ borderColor: showFilters || hasFilters ? 'rgba(79,107,255,0.4)' : undefined, color: showFilters || hasFilters ? 'var(--accent)' : undefined, gap: 7 }}>
+              style={{ borderColor: showFilters || hasFilters ? 'rgba(13,148,136,0.4)' : undefined, color: showFilters || hasFilters ? 'var(--accent)' : undefined, gap: 7 }}>
               <SlidersHorizontal size={14} />Filters{hasFilters && <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--accent)', display: 'inline-block' }} />}
             </button>
             {hasFilters && <button onClick={clearFilters} className="btn-ghost" style={{ padding: '9px 12px' }}><X size={13} /></button>}
@@ -222,7 +222,7 @@ export function MistakeLedger({ mistakes, setMistakes, onXP }: MistakeLedgerProp
               <div className="flex flex-wrap gap-2">
                 {[{ l: '7 Days', v: 7 }, { l: '30 Days', v: 30 }, { l: '1 Year', v: 365 }].map(p => (
                   <button key={p.v} onClick={() => { setDatePreset(datePreset === p.v ? null : p.v); setDateFrom(''); setDateTo(''); }}
-                    style={{ padding: '6px 12px', borderRadius: 'var(--radius-badge)', fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1px solid', borderColor: datePreset === p.v ? 'rgba(79,107,255,0.4)' : 'var(--border-subtle)', background: datePreset === p.v ? 'var(--accent-muted-bg)' : 'var(--bg-elevated)', color: datePreset === p.v ? 'var(--accent)' : 'var(--text-secondary)' }}>
+                    style={{ padding: '6px 12px', borderRadius: 'var(--radius-badge)', fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1px solid', borderColor: datePreset === p.v ? 'rgba(13,148,136,0.4)' : 'var(--border-subtle)', background: datePreset === p.v ? 'var(--accent-muted-bg)' : 'var(--bg-elevated)', color: datePreset === p.v ? 'var(--accent)' : 'var(--text-secondary)' }}>
                     {p.l}
                   </button>
                 ))}
@@ -252,7 +252,7 @@ export function MistakeLedger({ mistakes, setMistakes, onXP }: MistakeLedgerProp
                 <div className="flex gap-1.5">
                   {['all', 'Active', 'Mastered'].map(s => (
                     <button key={s} onClick={() => setFilterStatus(s as any)}
-                      style={{ padding: '6px 12px', borderRadius: 'var(--radius-badge)', fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1px solid', borderColor: filterStatus === s ? (s === 'Mastered' ? 'rgba(34,197,94,0.3)' : s === 'Active' ? 'rgba(245,166,35,0.3)' : 'rgba(79,107,255,0.3)') : 'var(--border-subtle)', background: filterStatus === s ? (s === 'Mastered' ? 'var(--success-bg)' : s === 'Active' ? 'var(--warning-bg)' : 'var(--accent-muted-bg)') : 'var(--bg-elevated)', color: filterStatus === s ? (s === 'Mastered' ? 'var(--success)' : s === 'Active' ? 'var(--warning)' : 'var(--accent)') : 'var(--text-secondary)' }}>
+                      style={{ padding: '6px 12px', borderRadius: 'var(--radius-badge)', fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1px solid', borderColor: filterStatus === s ? (s === 'Mastered' ? 'rgba(34,197,94,0.3)' : s === 'Active' ? 'rgba(245,166,35,0.3)' : 'rgba(13,148,136,0.3)') : 'var(--border-subtle)', background: filterStatus === s ? (s === 'Mastered' ? 'var(--success-bg)' : s === 'Active' ? 'var(--warning-bg)' : 'var(--accent-muted-bg)') : 'var(--bg-elevated)', color: filterStatus === s ? (s === 'Mastered' ? 'var(--success)' : s === 'Active' ? 'var(--warning)' : 'var(--accent)') : 'var(--text-secondary)' }}>
                       {s === 'all' ? 'All' : s}
                     </button>
                   ))}
@@ -373,7 +373,7 @@ export function MistakeLedger({ mistakes, setMistakes, onXP }: MistakeLedgerProp
                 <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{format(parseISO(drawerMistake.date), 'MMM d, yyyy')}</span>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => setEditMode(!editMode)} className="btn-ghost" style={{ padding: '7px 12px', fontSize: 12, borderColor: editMode ? 'rgba(79,107,255,0.4)' : undefined, color: editMode ? 'var(--accent)' : undefined }}>
+                <button onClick={() => setEditMode(!editMode)} className="btn-ghost" style={{ padding: '7px 12px', fontSize: 12, borderColor: editMode ? 'rgba(13,148,136,0.4)' : undefined, color: editMode ? 'var(--accent)' : undefined }}>
                   <Edit3 size={12} />{editMode ? 'Editing' : 'Edit'}
                 </button>
                 <button onClick={() => { setDrawerMistake(null); setEditMode(false); }} className="btn-ghost" style={{ padding: '7px 9px' }}>

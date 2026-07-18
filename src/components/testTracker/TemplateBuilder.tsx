@@ -81,7 +81,7 @@ export function TemplateBuilder({ onSave, onCancel, editing }: TemplateBuilderPr
                 if (p === 'dual' && papers.length < 2) { setPapers(prev => [...prev, DEFAULT_SUBJECTS.map(s => blankSubject(s))]); setMarksPreset(prev => [...prev, true]); }
                 if (p === 'single' && papers.length > 1) { setPapers(prev => prev.slice(0, 1)); setMarksPreset(prev => prev.slice(0, 1)); }
               }}
-                style={{ flex: 1, padding: '10px 14px', borderRadius: 'var(--radius-button)', fontSize: 13, fontWeight: 600, cursor: 'pointer', border: '1px solid', borderColor: pattern === p ? 'rgba(79,107,255,0.4)' : 'var(--border-subtle)', background: pattern === p ? 'var(--accent-muted-bg)' : 'var(--bg-elevated)', color: pattern === p ? 'var(--accent)' : 'var(--text-secondary)', transition: 'all 150ms' }}>
+                style={{ flex: 1, padding: '10px 14px', borderRadius: 'var(--radius-button)', fontSize: 13, fontWeight: 600, cursor: 'pointer', border: '1px solid', borderColor: pattern === p ? 'rgba(13,148,136,0.4)' : 'var(--border-subtle)', background: pattern === p ? 'var(--accent-muted-bg)' : 'var(--bg-elevated)', color: pattern === p ? 'var(--accent)' : 'var(--text-secondary)', transition: 'all 150ms' }}>
                 {p === 'single' ? 'Single Paper' : 'Dual Paper (Advanced)'}
               </button>
             ))}
@@ -96,7 +96,7 @@ export function TemplateBuilder({ onSave, onCancel, editing }: TemplateBuilderPr
                 <div className="flex items-center gap-2">
                   <span style={{ fontSize: 11, fontWeight: 600, color: marksPreset[pi] ? 'var(--accent)' : 'var(--text-tertiary)' }}>Marks Preset</span>
                   <button onClick={() => togglePaperPreset(pi)}
-                    style={{ width: 36, height: 20, borderRadius: 999, border: '1px solid', borderColor: marksPreset[pi] ? 'rgba(79,107,255,0.4)' : 'var(--border-subtle)', background: marksPreset[pi] ? 'var(--accent)' : 'var(--bg-surface)', position: 'relative', cursor: 'pointer', transition: 'all 200ms', flexShrink: 0 }}>
+                    style={{ width: 36, height: 20, borderRadius: 999, border: '1px solid', borderColor: marksPreset[pi] ? 'rgba(13,148,136,0.4)' : 'var(--border-subtle)', background: marksPreset[pi] ? 'var(--accent)' : 'var(--bg-surface)', position: 'relative', cursor: 'pointer', transition: 'all 200ms', flexShrink: 0 }}>
                     <div style={{ position: 'absolute', top: 1, left: marksPreset[pi] ? 18 : 1, width: 16, height: 16, borderRadius: '50%', background: marksPreset[pi] ? '#fff' : 'var(--text-tertiary)', transition: 'all 200ms' }} />
                   </button>
                 </div>
@@ -128,7 +128,7 @@ export function TemplateBuilder({ onSave, onCancel, editing }: TemplateBuilderPr
                       </div>
                       <div className="md:col-span-2 flex items-center gap-2" style={{ paddingBottom: 7 }}>
                         <button onClick={() => updateSubject(pi, si, { partialMarking: !s.partialMarking })}
-                          style={{ padding: '6px 10px', borderRadius: 'var(--radius-badge)', fontSize: 10, fontWeight: 600, cursor: 'pointer', border: '1px solid', borderColor: s.partialMarking ? 'rgba(79,107,255,0.4)' : 'var(--border-subtle)', background: s.partialMarking ? 'var(--accent-muted-bg)' : 'var(--bg-elevated)', color: s.partialMarking ? 'var(--accent)' : 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
+                          style={{ padding: '6px 10px', borderRadius: 'var(--radius-badge)', fontSize: 10, fontWeight: 600, cursor: 'pointer', border: '1px solid', borderColor: s.partialMarking ? 'rgba(13,148,136,0.4)' : 'var(--border-subtle)', background: s.partialMarking ? 'var(--accent-muted-bg)' : 'var(--bg-elevated)', color: s.partialMarking ? 'var(--accent)' : 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
                           Partial
                         </button>
                       </div>
@@ -158,7 +158,7 @@ export function TemplateBuilder({ onSave, onCancel, editing }: TemplateBuilderPr
           <div className="flex items-center justify-between mb-3">
             <span className="section-label">Computed Totals</span>
             <button onClick={() => { setManualOverride(!manualOverride); if (!manualOverride) { setManualQuestions(auto.tq); setManualMarks(auto.tm); } }}
-              style={{ padding: '5px 10px', borderRadius: 'var(--radius-badge)', fontSize: 10, fontWeight: 600, cursor: 'pointer', border: '1px solid', borderColor: manualOverride ? 'rgba(79,107,255,0.4)' : 'var(--border-subtle)', background: manualOverride ? 'var(--accent-muted-bg)' : 'var(--bg-surface)', color: manualOverride ? 'var(--accent)' : 'var(--text-tertiary)' }}>
+              style={{ padding: '5px 10px', borderRadius: 'var(--radius-badge)', fontSize: 10, fontWeight: 600, cursor: 'pointer', border: '1px solid', borderColor: manualOverride ? 'rgba(13,148,136,0.4)' : 'var(--border-subtle)', background: manualOverride ? 'var(--accent-muted-bg)' : 'var(--bg-surface)', color: manualOverride ? 'var(--accent)' : 'var(--text-tertiary)' }}>
               Manual Override
             </button>
           </div>
@@ -217,7 +217,7 @@ export function TemplateLibrary({ templates, attempts, onEdit, onDuplicate, onDe
               <div className="min-w-0 flex-1">
                 <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>{tpl.name}</h3>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="badge" style={{ background: 'var(--accent-muted-bg)', color: 'var(--accent)', borderColor: 'rgba(79,107,255,0.2)' }}>
+                  <span className="badge" style={{ background: 'var(--accent-muted-bg)', color: 'var(--accent)', borderColor: 'rgba(13,148,136,0.2)' }}>
                     {tpl.pattern === 'single' ? 'Single Paper' : 'Dual Paper'}
                   </span>
                   <span className="badge" style={{ background: 'var(--bg-elevated)', color: 'var(--text-tertiary)', borderColor: 'var(--border-subtle)' }}>

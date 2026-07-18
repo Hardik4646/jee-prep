@@ -181,7 +181,7 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {templates.map(tpl => (
               <button key={tpl.id} onClick={() => selectTemplate(tpl.id)}
-                style={{ textAlign: 'left', padding: 16, borderRadius: 'var(--radius-card)', cursor: 'pointer', transition: 'all 150ms', border: '1px solid', borderColor: templateId === tpl.id ? 'rgba(79,107,255,0.4)' : 'var(--border-subtle)', background: templateId === tpl.id ? 'var(--accent-muted-bg)' : 'var(--bg-elevated)' }}>
+                style={{ textAlign: 'left', padding: 16, borderRadius: 'var(--radius-card)', cursor: 'pointer', transition: 'all 150ms', border: '1px solid', borderColor: templateId === tpl.id ? 'rgba(13,148,136,0.4)' : 'var(--border-subtle)', background: templateId === tpl.id ? 'var(--accent-muted-bg)' : 'var(--bg-elevated)' }}>
                 <div className="flex items-center justify-between mb-2">
                   <span style={{ fontSize: 14, fontWeight: 600, color: templateId === tpl.id ? 'var(--accent)' : 'var(--text-primary)' }}>{tpl.name}</span>
                   {templateId === tpl.id && <CheckCircle2 size={16} style={{ color: 'var(--accent)' }} />}
@@ -237,7 +237,7 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
             ) : template.marksPreset.some(v => !v) ? (
               <div style={{ padding: '6px 12px', borderRadius: 'var(--radius-button)', fontSize: 11, fontWeight: 600, background: 'var(--warning-bg)', color: 'var(--warning)', border: '1px solid rgba(245,166,35,0.2)' }}>Manual entry mode</div>
             ) : (
-              <div style={{ padding: '6px 12px', borderRadius: 'var(--radius-button)', fontSize: 11, fontWeight: 600, background: 'var(--accent-muted-bg)', color: 'var(--accent)', border: '1px solid rgba(79,107,255,0.2)' }}>Auto-calc</div>
+              <div style={{ padding: '6px 12px', borderRadius: 'var(--radius-button)', fontSize: 11, fontWeight: 600, background: 'var(--accent-muted-bg)', color: 'var(--accent)', border: '1px solid rgba(13,148,136,0.2)' }}>Auto-calc</div>
             )}
           </div>
 

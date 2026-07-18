@@ -103,7 +103,7 @@ export default function App() {
           <div className="card animate-slide-up" style={{ maxWidth: 460, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 34, height: 34, borderRadius: 'var(--radius-button)', background: 'var(--accent-muted-bg)', border: '1px solid rgba(79,107,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: 34, height: 34, borderRadius: 'var(--radius-button)', background: 'var(--accent-muted-bg)', border: '1px solid rgba(13,148,136,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Settings size={15} style={{ color: 'var(--accent)' }} />
                 </div>
                 <div>
