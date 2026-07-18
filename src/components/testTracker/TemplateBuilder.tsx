@@ -18,7 +18,8 @@ export function TemplateBuilder({ onSave, onCancel, editing }: TemplateBuilderPr
   const [manualOverride, setManualOverride] = useState(editing?.manualOverride ?? false);
   const [manualQuestions, setManualQuestions] = useState(editing?.totalQuestions ?? 0);
   const [manualMarks, setManualMarks] = useState(editing?.totalMaxMarks ?? 0);
-  const [marksPreset, setMarksPreset] = useState(editing?.marksPreset ?? true);
+  const [marksPreset, setMarksPreset] = useState<boolean[]>(editing?.marksPreset ?? [true]);
+  const togglePaperPreset = (pi: number) => setMarksPreset(prev => prev.map((v, i) => i === pi ? !v : v));
 
   const updatePaper = (pi: number, fn: (p: TemplateSubject[]) => TemplateSubject[]) => {
     setPapers(prev => prev.map((p, i) => i === pi ? fn(p) : p));
@@ -34,8 +35,8 @@ export function TemplateBuilder({ onSave, onCancel, editing }: TemplateBuilderPr
       const c = [...p]; [c[si], c[ni]] = [c[ni], c[si]]; return c;
     });
   };
-  const addPaper = () => setPapers(prev => [...prev, DEFAULT_SUBJECTS.map(s => blankSubject(s))]);
-  const removePaper = (pi: number) => setPapers(prev => prev.filter((_, i) => i !== pi));
+  const addPaper = () => { setPapers(prev => [...prev, DEFAULT_SUBJECTS.map(s => blankSubject(s))]); setMarksPreset(prev => [...prev, true]); };
+  const removePaper = (pi: number) => { setPapers(prev => prev.filter((_, i) => i !== pi)); setMarksPreset(prev => prev.filter((_, i) => i !== pi)); };
 
   const auto = useMemo(() => {
     let tq = 0, tm = 0;
@@ -77,8 +78,8 @@ export function TemplateBuilder({ onSave, onCancel, editing }: TemplateBuilderPr
             {(['single', 'dual'] as ExamPattern[]).map(p => (
               <button key={p} onClick={() => {
                 setPattern(p);
-                if (p === 'dual' && papers.length < 2) setPapers(prev => [...prev, DEFAULT_SUBJECTS.map(s => blankSubject(s))]);
-                if (p === 'single' && papers.length > 1) setPapers(prev => prev.slice(0, 1));
+                if (p === 'dual' && papers.length < 2) { setPapers(prev => [...prev, DEFAULT_SUBJECTS.map(s => blankSubject(s))]); setMarksPreset(prev => [...prev, true]); }
+                if (p === 'single' && papers.length > 1) { setPapers(prev => prev.slice(0, 1)); setMarksPreset(prev => prev.slice(0, 1)); }
               }}
                 style={{ flex: 1, padding: '10px 14px', borderRadius: 'var(--radius-button)', fontSize: 13, fontWeight: 600, cursor: 'pointer', border: '1px solid', borderColor: pattern === p ? 'rgba(79,107,255,0.4)' : 'var(--border-subtle)', background: pattern === p ? 'var(--accent-muted-bg)' : 'var(--bg-elevated)', color: pattern === p ? 'var(--accent)' : 'var(--text-secondary)', transition: 'all 150ms' }}>
                 {p === 'single' ? 'Single Paper' : 'Dual Paper (Advanced)'}
@@ -91,9 +92,18 @@ export function TemplateBuilder({ onSave, onCancel, editing }: TemplateBuilderPr
           <div key={pi} className="card" style={{ padding: 16, background: 'var(--bg-elevated)' }}>
             <div className="flex items-center justify-between mb-3">
               <span className="section-label">{paperLabels[pi] ?? `Paper ${pi + 1}`}</span>
-              {pattern === 'dual' && papers.length > 2 && (
-                <button onClick={() => removePaper(pi)} className="btn-ghost" style={{ padding: '4px 8px', fontSize: 11, borderColor: 'rgba(245,69,92,0.2)', color: 'var(--danger)' }}><Trash2 size={11} />Remove</button>
-              )}
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span style={{ fontSize: 11, fontWeight: 600, color: marksPreset[pi] ? 'var(--accent)' : 'var(--text-tertiary)' }}>Marks Preset</span>
+                  <button onClick={() => togglePaperPreset(pi)}
+                    style={{ width: 36, height: 20, borderRadius: 999, border: '1px solid', borderColor: marksPreset[pi] ? 'rgba(79,107,255,0.4)' : 'var(--border-subtle)', background: marksPreset[pi] ? 'var(--accent)' : 'var(--bg-surface)', position: 'relative', cursor: 'pointer', transition: 'all 200ms', flexShrink: 0 }}>
+                    <div style={{ position: 'absolute', top: 1, left: marksPreset[pi] ? 18 : 1, width: 16, height: 16, borderRadius: '50%', background: marksPreset[pi] ? '#fff' : 'var(--text-tertiary)', transition: 'all 200ms' }} />
+                  </button>
+                </div>
+                {pattern === 'dual' && papers.length > 2 && (
+                  <button onClick={() => removePaper(pi)} className="btn-ghost" style={{ padding: '4px 8px', fontSize: 11, borderColor: 'rgba(245,69,92,0.2)', color: 'var(--danger)' }}><Trash2 size={11} />Remove</button>
+                )}
+              </div>
             </div>
             <div className="space-y-2">
               {paper.map((s, si) => (
@@ -106,20 +116,28 @@ export function TemplateBuilder({ onSave, onCancel, editing }: TemplateBuilderPr
                     <label className="field-label" style={{ marginBottom: 3 }}>Questions</label>
                     <input type="number" className="field" style={{ padding: '7px 10px', fontSize: 13 }} value={s.numQuestions} onChange={e => updateSubject(pi, si, { numQuestions: parseInt(e.target.value) || 0 })} min={0} />
                   </div>
-                  <div className="md:col-span-2">
-                    <label className="field-label" style={{ marginBottom: 3 }}>Marks/Correct</label>
-                    <input type="number" step="0.5" className="field" style={{ padding: '7px 10px', fontSize: 13 }} value={s.marksPerCorrect} onChange={e => updateSubject(pi, si, { marksPerCorrect: parseFloat(e.target.value) || 0 })} />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="field-label" style={{ marginBottom: 3 }}>Neg/Wrong</label>
-                    <input type="number" step="0.5" className="field" style={{ padding: '7px 10px', fontSize: 13 }} value={s.negativePerWrong} onChange={e => updateSubject(pi, si, { negativePerWrong: parseFloat(e.target.value) || 0 })} />
-                  </div>
-                  <div className="md:col-span-2 flex items-center gap-2" style={{ paddingBottom: 7 }}>
-                    <button onClick={() => updateSubject(pi, si, { partialMarking: !s.partialMarking })}
-                      style={{ padding: '6px 10px', borderRadius: 'var(--radius-badge)', fontSize: 10, fontWeight: 600, cursor: 'pointer', border: '1px solid', borderColor: s.partialMarking ? 'rgba(79,107,255,0.4)' : 'var(--border-subtle)', background: s.partialMarking ? 'var(--accent-muted-bg)' : 'var(--bg-elevated)', color: s.partialMarking ? 'var(--accent)' : 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
-                      Partial
-                    </button>
-                  </div>
+                  {marksPreset[pi] ? (
+                    <>
+                      <div className="md:col-span-2">
+                        <label className="field-label" style={{ marginBottom: 3 }}>Marks/Correct</label>
+                        <input type="number" step="0.5" className="field" style={{ padding: '7px 10px', fontSize: 13 }} value={s.marksPerCorrect} onChange={e => updateSubject(pi, si, { marksPerCorrect: parseFloat(e.target.value) || 0 })} />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="field-label" style={{ marginBottom: 3 }}>Neg/Wrong</label>
+                        <input type="number" step="0.5" className="field" style={{ padding: '7px 10px', fontSize: 13 }} value={s.negativePerWrong} onChange={e => updateSubject(pi, si, { negativePerWrong: parseFloat(e.target.value) || 0 })} />
+                      </div>
+                      <div className="md:col-span-2 flex items-center gap-2" style={{ paddingBottom: 7 }}>
+                        <button onClick={() => updateSubject(pi, si, { partialMarking: !s.partialMarking })}
+                          style={{ padding: '6px 10px', borderRadius: 'var(--radius-badge)', fontSize: 10, fontWeight: 600, cursor: 'pointer', border: '1px solid', borderColor: s.partialMarking ? 'rgba(79,107,255,0.4)' : 'var(--border-subtle)', background: s.partialMarking ? 'var(--accent-muted-bg)' : 'var(--bg-elevated)', color: s.partialMarking ? 'var(--accent)' : 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
+                          Partial
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="md:col-span-6 flex items-center" style={{ paddingBottom: 7 }}>
+                      <p style={{ fontSize: 11, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>Manual entry — marks per question not required</p>
+                    </div>
+                  )}
                   <div className="md:col-span-1 flex items-center gap-1" style={{ paddingBottom: 7 }}>
                     <button onClick={() => moveSubject(pi, si, -1)} disabled={si === 0} style={{ padding: '4px', borderRadius: 'var(--radius-badge)', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)', cursor: si === 0 ? 'default' : 'pointer', opacity: si === 0 ? 0.3 : 1 }}>↑</button>
                     <button onClick={() => moveSubject(pi, si, 1)} disabled={si === paper.length - 1} style={{ padding: '4px', borderRadius: 'var(--radius-badge)', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)', cursor: si === paper.length - 1 ? 'default' : 'pointer', opacity: si === paper.length - 1 ? 0.3 : 1 }}>↓</button>
@@ -144,16 +162,7 @@ export function TemplateBuilder({ onSave, onCancel, editing }: TemplateBuilderPr
               Manual Override
             </button>
           </div>
-          <div className="flex items-center justify-between mb-3" style={{ paddingBottom: 12, borderBottom: '1px solid var(--border-subtle)' }}>
-            <div>
-              <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Marks Preset</p>
-              <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{marksPreset ? 'Auto-calculate scores from marks-per-question' : 'Manual entry of marks obtained, neg. marks, correct/wrong/attempted'}</p>
-            </div>
-            <button onClick={() => setMarksPreset(!marksPreset)}
-              style={{ width: 44, height: 24, borderRadius: 999, border: '1px solid', borderColor: marksPreset ? 'rgba(79,107,255,0.4)' : 'var(--border-subtle)', background: marksPreset ? 'var(--accent)' : 'var(--bg-surface)', position: 'relative', cursor: 'pointer', transition: 'all 200ms', flexShrink: 0 }}>
-              <div style={{ position: 'absolute', top: 2, left: marksPreset ? 22 : 2, width: 18, height: 18, borderRadius: '50%', background: marksPreset ? '#fff' : 'var(--text-tertiary)', transition: 'all 200ms' }} />
-            </button>
-          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="field-label">Total Questions</label>
@@ -217,6 +226,11 @@ export function TemplateLibrary({ templates, attempts, onEdit, onDuplicate, onDe
                   <span className="badge" style={{ background: 'var(--info-bg)', color: 'var(--info)', borderColor: 'rgba(56,189,248,0.2)' }}>
                     Used {used}×
                   </span>
+                  {tpl.marksPreset.map((on, pi) => (
+                    <span key={pi} className="badge" style={{ background: on ? 'var(--success-bg)' : 'var(--warning-bg)', color: on ? 'var(--success)' : 'var(--warning)', borderColor: on ? 'rgba(34,197,94,0.2)' : 'rgba(245,166,35,0.2)' }}>
+                      {tpl.pattern === 'dual' ? `P${pi + 1}: ` : ''}{on ? 'Preset' : 'Manual'}
+                    </span>
+                  ))}
                 </div>
               </div>
             </div>

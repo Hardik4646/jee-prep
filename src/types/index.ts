@@ -97,7 +97,7 @@ export interface ExamTemplate {
   totalQuestions: number;
   totalMaxMarks: number;
   manualOverride: boolean;
-  marksPreset: boolean;
+  marksPreset: boolean[];
   createdAt: number;
   timesUsed: number;
 }

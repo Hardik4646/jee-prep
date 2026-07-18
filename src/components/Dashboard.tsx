@@ -1,6 +1,7 @@
 import { useMemo, useState, memo } from 'react';
 import {
   AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid,
+  ReferenceDot, Label,
 } from 'recharts';
 import { Flame, Star, TrendingUp, CheckCircle2, Clock, AlertTriangle, RefreshCw, Sparkles, ArrowRight, Zap, Sun, Sunrise, Sunset } from 'lucide-react';
 import { Mistake, GamificationState, View, Subject, ErrorCategory, Priority, MistakeStatus } from '../types';
@@ -26,40 +27,84 @@ const CATEGORY_COLORS: Record<ErrorCategory, string> = {
 const PRIORITY_COLORS: Record<Priority, string> = { High: '#F5455C', Medium: '#F5A623', Low: '#5C5F70' };
 const STATUS_COLORS: Record<MistakeStatus, string> = { Active: '#F5A623', Mastered: '#22C55E' };
 
-const ChartTooltip = ({ active, payload, label }: any) => {
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: any[];
+  label?: string;
+  data?: { date: string; count: number }[];
+}
+
+const ChartTooltip = ({ active, payload, label, data }: ChartTooltipProps) => {
   if (!active || !payload?.length) return null;
+  const count = payload[0]?.value ?? 0;
+  const idx = data?.findIndex(d => d.date === label);
+  const prevCount = idx && idx > 0 ? data![idx - 1].count : undefined;
+  const diff = prevCount !== undefined ? count - prevCount : undefined;
+  const prevLabel = idx && idx > 0 ? data![idx - 1].date : undefined;
   return (
-    <div className="card" style={{ padding: '10px 12px', minWidth: 100 }}>
+    <div className="card" style={{ padding: '10px 12px', minWidth: 140 }}>
       {label && <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 4 }}>{label}</p>}
-      {payload.map((p: any, i: number) => (
-        <p key={i} style={{ fontSize: 13, fontWeight: 700, color: p.color || p.fill || 'var(--text-primary)' }}>
-          {p.name}: {p.value}
-        </p>
-      ))}
+      <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>
+        {count} mistake{count === 1 ? '' : 's'} logged
+        {diff !== undefined && diff !== 0 && prevLabel && (
+          <span style={{ fontSize: 11, fontWeight: 600, color: diff > 0 ? 'var(--danger)' : 'var(--success)' }}>
+            {' '}({diff > 0 ? '+' : ''}{diff} vs {prevLabel})
+          </span>
+        )}
+        {diff === 0 && prevLabel && (
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)' }}> (same as {prevLabel})</span>
+        )}
+      </p>
     </div>
   );
 };
 
-const TrendChart = memo(({ data }: { data: { date: string; count: number }[] }) => (
-  <div style={{ height: 180 }}>
-    <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={data} margin={{ left: -20, right: 4, top: 4, bottom: 0 }}>
-        <defs>
-          <linearGradient id="areaAccent" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.25} />
-            <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="0" stroke="var(--border-subtle)" vertical={false} />
-        <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }} stroke="transparent" interval={3} />
-        <YAxis tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }} stroke="transparent" allowDecimals={false} width={24} />
-        <Tooltip content={<ChartTooltip />} />
-        <Area type="monotoneX" dataKey="count" name="Mistakes" stroke="var(--accent)" strokeWidth={3} fill="url(#areaAccent)"
-          dot={false} activeDot={{ r: 5, fill: 'var(--accent)', strokeWidth: 0 }} isAnimationActive={false} />
-      </AreaChart>
-    </ResponsiveContainer>
-  </div>
-));
+interface TrendChartProps {
+  data: { date: string; count: number }[];
+  mistakes: Mistake[];
+  onPointClick?: (date: string, mistakes: Mistake[]) => void;
+}
+
+const TrendChart = memo(({ data, mistakes, onPointClick }: TrendChartProps) => {
+  const last = data[data.length - 1];
+  const handleClick = (e: any) => {
+    if (!e || !e.activeLabel) return;
+    const dateLabel = e.activeLabel;
+    // trendData dates are formatted "MMM d"; map back to yyyy-MM-dd via index
+    const idx = data.findIndex(d => d.date === dateLabel);
+    if (idx < 0) return;
+    const days = eachDayOfInterval({ start: subDays(new Date(), 13), end: new Date() });
+    const ds = format(days[idx], 'yyyy-MM-dd');
+    const dayMistakes = mistakes.filter(m => m.date === ds);
+    onPointClick?.(dateLabel, dayMistakes);
+  };
+  return (
+    <div style={{ height: 180 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ left: 8, right: 12, top: 4, bottom: 0 }} onClick={handleClick}>
+          <defs>
+            <linearGradient id="areaAccent" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.25} />
+              <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="0" stroke="var(--border-subtle)" vertical={false} />
+          <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }} stroke="transparent" interval={3} />
+          <YAxis tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }} stroke="transparent" allowDecimals={false} width={36}
+            label={{ value: 'Mistakes logged', angle: -90, position: 'insideLeft', style: { fill: 'var(--text-tertiary)', fontSize: 10 } }} />
+          <Tooltip content={<ChartTooltip data={data} />} />
+          <Area type="monotoneX" dataKey="count" name="Mistakes" stroke="var(--accent)" strokeWidth={3} fill="url(#areaAccent)"
+            dot={false} activeDot={{ r: 5, fill: 'var(--accent)', strokeWidth: 0 }} isAnimationActive={false} />
+          {last && (
+            <ReferenceDot x={last.date} y={last.count} r={5} fill="var(--accent)" stroke="var(--bg-surface)" strokeWidth={2} isAnimationActive={false}>
+              <Label value={last.count} position="right" style={{ fill: 'var(--accent)', fontSize: 11, fontWeight: 700 }} />
+            </ReferenceDot>
+          )}
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+});
 TrendChart.displayName = 'TrendChart';
 
 function KPICard({ label, value, sub, icon: Icon, iconColor, iconBg, onClick }: {
@@ -112,6 +157,7 @@ export function Dashboard({ mistakes, gamification, setCurrentView }: DashboardP
   const [randomIndex, setRandomIndex] = useState(() =>
     validMistakes.length > 0 ? Math.floor(Math.random() * validMistakes.length) : 0
   );
+  const [popover, setPopover] = useState<{ date: string; mistakes: Mistake[] } | null>(null);
   const nextRandom = () => setRandomIndex(i => (i + 1) % Math.max(validMistakes.length, 1));
   const randomMistake = validMistakes.length > 0 ? validMistakes[randomIndex % validMistakes.length] : null;
 
@@ -227,7 +273,7 @@ export function Dashboard({ mistakes, gamification, setCurrentView }: DashboardP
               <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)' }}>{trendData.reduce((s, d) => s + d.count, 0)} total</span>
             </div>
           </div>
-          <TrendChart data={trendData} />
+          <TrendChart data={trendData} mistakes={validMistakes} onPointClick={(date, ms) => setPopover({ date, mistakes: ms })} />
         </div>
 
         {/* Random Mistake */}
@@ -330,6 +376,39 @@ export function Dashboard({ mistakes, gamification, setCurrentView }: DashboardP
           )}
         </div>
       </div>
+
+      {/* Trend point detail popover */}
+      {popover && (
+        <div onClick={() => setPopover(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div className="card" onClick={e => e.stopPropagation()} style={{ padding: 24, maxWidth: 460, width: '100%', maxHeight: '80vh', overflowY: 'auto' }}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="card-title">{popover.date}</p>
+                <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{popover.mistakes.length} mistake{popover.mistakes.length === 1 ? '' : 's'} logged</p>
+              </div>
+              <button onClick={() => setPopover(null)} className="btn-ghost" style={{ padding: '6px 10px', fontSize: 12 }}>Close</button>
+            </div>
+            {popover.mistakes.length > 0 ? (
+              <div className="space-y-2">
+                {popover.mistakes.map(m => (
+                  <div key={m.id} className="flex items-center gap-3" style={{ padding: '10px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-card)' }}>
+                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: SUBJECT_COLORS[m.subject] }} />
+                    <div className="flex-1 min-w-0">
+                      <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.chapter || 'Untitled'}</p>
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        <span className="badge" style={{ background: `${SUBJECT_COLORS[m.subject]}15`, color: SUBJECT_COLORS[m.subject], borderColor: `${SUBJECT_COLORS[m.subject]}30` }}>{m.subject}</span>
+                        <span className="badge" style={{ background: `${CATEGORY_COLORS[m.errorCategory]}15`, color: CATEGORY_COLORS[m.errorCategory], borderColor: `${CATEGORY_COLORS[m.errorCategory]}25` }}>{m.errorCategory}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={{ fontSize: 13, color: 'var(--text-tertiary)', textAlign: 'center', padding: '24px 0' }}>No mistakes logged on this day</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

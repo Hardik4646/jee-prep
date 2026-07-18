@@ -37,14 +37,15 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
     setPaperInputs(tpl.papers.map(paper => paper.map(() => ({ correct: '', incorrect: '', unattempted: '' }))));
     setDirectMarks(tpl.papers.map(() => ''));
     setManualInputs(tpl.papers.map(paper => paper.map(() => ({ marksObtained: '', negativeMarks: '', correct: '', incorrect: '', unattempted: '' }))));
-    setEntryMode(tpl.marksPreset ? 'counts' : 'manual');
+    setEntryMode(tpl.marksPreset.every(Boolean) ? 'counts' : 'manual');
     setTargetScore('');
   };
 
   const livePapers: PaperScore[] = useMemo(() => {
     if (!template) return [];
     return template.papers.map((paper, pi) => {
-      if (entryMode === 'marks') {
+      const mode = template.marksPreset[pi] ? (entryMode === 'marks' ? 'marks' : 'counts') : 'manual';
+      if (mode === 'marks') {
         const dm = parseFloat(directMarks[pi] ?? '') || 0;
         return {
           subjects: paper.map(s => ({ subjectName: s.name, correct: 0, incorrect: 0, unattempted: 0, score: 0, maxScore: s.numQuestions * s.marksPerCorrect, accuracy: 0 })),
@@ -53,7 +54,7 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
           totalQuestions: paper.reduce((a, s) => a + s.numQuestions, 0), accuracy: 0,
         };
       }
-      if (entryMode === 'manual') {
+      if (mode === 'manual') {
         const inputs = manualInputs[pi] ?? [];
         const subjScores = paper.map((s, si) => {
           const inp = inputs[si] ?? { marksObtained: '', negativeMarks: '', correct: '', incorrect: '', unattempted: '' };
@@ -101,19 +102,18 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
   const liveMarksLost = useMemo(() => {
     if (!template) return 0;
     let lost = 0;
-    if (entryMode === 'manual') {
-      template.papers.forEach((paper, pi) => {
+    template.papers.forEach((paper, pi) => {
+      const mode = template.marksPreset[pi] ? (entryMode === 'marks' ? 'marks' : 'counts') : 'manual';
+      if (mode === 'manual') {
         (manualInputs[pi] ?? []).forEach((inp) => {
           lost += parseFloat(inp?.negativeMarks ?? '') || 0;
         });
-      });
-      return lost;
-    }
-    template.papers.forEach((paper, pi) => {
-      paper.forEach((s, si) => {
-        const inc = parseInt(paperInputs[pi]?.[si]?.incorrect ?? '') || 0;
-        if (s.negativePerWrong < 0) lost += inc * Math.abs(s.negativePerWrong);
-      });
+      } else if (mode === 'counts') {
+        paper.forEach((s, si) => {
+          const inc = parseInt(paperInputs[pi]?.[si]?.incorrect ?? '') || 0;
+          if (s.negativePerWrong < 0) lost += inc * Math.abs(s.negativePerWrong);
+        });
+      }
     });
     return lost;
   }, [template, paperInputs, manualInputs, entryMode]);
@@ -228,21 +228,32 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
         <div className="space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <span className="section-label">Score Entry</span>
-            {template.marksPreset ? (
-              <div style={{ padding: '6px 12px', borderRadius: 'var(--radius-button)', fontSize: 11, fontWeight: 600, background: 'var(--accent-muted-bg)', color: 'var(--accent)', border: '1px solid rgba(79,107,255,0.2)' }}>Auto-calc from counts</div>
-            ) : (
+            {template.marksPreset.every(Boolean) ? (
               <div className="flex gap-1" style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-button)', padding: 3 }}>
-                {(['counts', 'marks', 'manual'] as const).map(m => (
-                  <button key={m} onClick={() => setEntryMode(m)} style={{ padding: '6px 12px', borderRadius: 'var(--radius-button)', fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none', background: entryMode === m ? 'var(--accent)' : 'transparent', color: entryMode === m ? '#fff' : 'var(--text-tertiary)' }}>{m === 'counts' ? 'By Counts' : m === 'marks' ? 'Direct Marks' : 'Manual'}</button>
+                {(['counts', 'marks'] as const).map(m => (
+                  <button key={m} onClick={() => setEntryMode(m)} style={{ padding: '6px 12px', borderRadius: 'var(--radius-button)', fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none', background: entryMode === m ? 'var(--accent)' : 'transparent', color: entryMode === m ? '#fff' : 'var(--text-tertiary)' }}>{m === 'counts' ? 'By Counts' : 'Direct Marks'}</button>
                 ))}
               </div>
+            ) : template.marksPreset.some(v => !v) ? (
+              <div style={{ padding: '6px 12px', borderRadius: 'var(--radius-button)', fontSize: 11, fontWeight: 600, background: 'var(--warning-bg)', color: 'var(--warning)', border: '1px solid rgba(245,166,35,0.2)' }}>Manual entry mode</div>
+            ) : (
+              <div style={{ padding: '6px 12px', borderRadius: 'var(--radius-button)', fontSize: 11, fontWeight: 600, background: 'var(--accent-muted-bg)', color: 'var(--accent)', border: '1px solid rgba(79,107,255,0.2)' }}>Auto-calc</div>
             )}
           </div>
 
-          {template.papers.map((paper, pi) => (
+          {template.papers.map((paper, pi) => {
+            const paperMode = template.marksPreset[pi] ? (entryMode === 'marks' ? 'marks' : 'counts') : 'manual';
+            return (
             <div key={pi} className="card" style={{ padding: 16, background: 'var(--bg-elevated)' }}>
-              {template.pattern === 'dual' && <p className="section-label" style={{ marginBottom: 10 }}>Paper {pi + 1}</p>}
-              {entryMode === 'counts' ? (
+              {template.pattern === 'dual' && (
+                <div className="flex items-center justify-between mb-3">
+                  <p className="section-label">Paper {pi + 1}</p>
+                  <span className="badge" style={{ background: template.marksPreset[pi] ? 'var(--success-bg)' : 'var(--warning-bg)', color: template.marksPreset[pi] ? 'var(--success)' : 'var(--warning)', borderColor: template.marksPreset[pi] ? 'rgba(34,197,94,0.2)' : 'rgba(245,166,35,0.2)' }}>
+                    {template.marksPreset[pi] ? 'Preset' : 'Manual'}
+                  </span>
+                </div>
+              )}
+              {paperMode === 'counts' ? (
                 <div className="space-y-2">
                   {paper.map((s, si) => {
                     const inp = paperInputs[pi]?.[si] ?? { correct: '', incorrect: '', unattempted: '' };
@@ -264,12 +275,18 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
                     );
                   })}
                 </div>
-              ) : entryMode === 'manual' ? (
+              ) : paperMode === 'manual' ? (
                 <div className="space-y-2">
                   {paper.map((s, si) => {
                     const inp = manualInputs[pi]?.[si] ?? { marksObtained: '', negativeMarks: '', correct: '', incorrect: '', unattempted: '' };
                     const score = (parseFloat(inp.marksObtained) || 0) - (parseFloat(inp.negativeMarks) || 0);
                     const maxScore = s.numQuestions * s.marksPerCorrect;
+                    const correct = parseInt(inp.correct) || 0;
+                    const wrong = parseInt(inp.incorrect) || 0;
+                    const unattempted = parseInt(inp.unattempted) || 0;
+                    const attempted = correct + wrong;
+                    const mismatch = attempted !== unattempted && (correct > 0 || wrong > 0 || unattempted > 0);
+                    const exceedsTotal = unattempted > s.numQuestions && unattempted > 0;
                     return (
                       <div key={s.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end" style={{ padding: '10px 12px', background: 'var(--bg-surface)', borderRadius: 'var(--radius-button)', border: '1px solid var(--border-subtle)' }}>
                         <div className="md:col-span-3">
@@ -278,11 +295,14 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
                         </div>
                         <div className="md:col-span-2"><label className="field-label" style={{ marginBottom: 3 }}>Marks Got</label><input type="number" step="0.5" className="field" style={{ padding: '7px 10px', fontSize: 13 }} value={inp.marksObtained} onChange={e => { const np = [...manualInputs]; np[pi] = [...(np[pi] ?? [])]; np[pi][si] = { ...inp, marksObtained: e.target.value }; setManualInputs(np); }} min={0} /></div>
                         <div className="md:col-span-2"><label className="field-label" style={{ marginBottom: 3 }}>Neg. Marks</label><input type="number" step="0.5" className="field" style={{ padding: '7px 10px', fontSize: 13 }} value={inp.negativeMarks} onChange={e => { const np = [...manualInputs]; np[pi] = [...(np[pi] ?? [])]; np[pi][si] = { ...inp, negativeMarks: e.target.value }; setManualInputs(np); }} min={0} /></div>
-                        <div className="md:col-span-2"><label className="field-label" style={{ marginBottom: 3 }}>Correct</label><input type="number" className="field" style={{ padding: '7px 10px', fontSize: 13 }} value={inp.correct} onChange={e => { const np = [...manualInputs]; np[pi] = [...(np[pi] ?? [])]; np[pi][si] = { ...inp, correct: e.target.value }; setManualInputs(np); }} min={0} /></div>
+                        <div className="md:col-span-1"><label className="field-label" style={{ marginBottom: 3 }}>Correct</label><input type="number" className="field" style={{ padding: '7px 10px', fontSize: 13 }} value={inp.correct} onChange={e => { const np = [...manualInputs]; np[pi] = [...(np[pi] ?? [])]; np[pi][si] = { ...inp, correct: e.target.value }; setManualInputs(np); }} min={0} /></div>
                         <div className="md:col-span-1"><label className="field-label" style={{ marginBottom: 3 }}>Wrong</label><input type="number" className="field" style={{ padding: '7px 10px', fontSize: 13 }} value={inp.incorrect} onChange={e => { const np = [...manualInputs]; np[pi] = [...(np[pi] ?? [])]; np[pi][si] = { ...inp, incorrect: e.target.value }; setManualInputs(np); }} min={0} /></div>
+                        <div className="md:col-span-1"><label className="field-label" style={{ marginBottom: 3 }}>Unatt.</label><input type="number" className="field" style={{ padding: '7px 10px', fontSize: 13 }} value={inp.unattempted} onChange={e => { const np = [...manualInputs]; np[pi] = [...(np[pi] ?? [])]; np[pi][si] = { ...inp, unattempted: e.target.value }; setManualInputs(np); }} min={0} /></div>
                         <div className="md:col-span-2" style={{ textAlign: 'right' }}>
                           <p style={{ fontSize: 16, fontWeight: 700, color: score >= 0 ? 'var(--success)' : 'var(--danger)' }}>{score.toFixed(1)}</p>
                           <p style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>of {maxScore}</p>
+                          {mismatch && <p style={{ fontSize: 9, color: 'var(--danger)', fontWeight: 600, marginTop: 2 }}>C+W≠Unatt</p>}
+                          {exceedsTotal && <p style={{ fontSize: 9, color: 'var(--danger)', fontWeight: 600 }}>Exceeds {s.numQuestions}Q</p>}
                         </div>
                       </div>
                     );
@@ -294,14 +314,14 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
                   <input type="number" step="0.5" className="field" style={{ fontSize: 18, fontWeight: 700 }} value={directMarks[pi] ?? ''} onChange={e => { const nd = [...directMarks]; nd[pi] = e.target.value; setDirectMarks(nd); }} placeholder={`Max: ${paper.reduce((a, s) => a + s.numQuestions * s.marksPerCorrect, 0)}`} />
                 </div>
               )}
-              {(entryMode === 'counts' || entryMode === 'manual') && (
+              {paperMode !== 'marks' && (
                 <div className="flex items-center justify-between mt-3" style={{ paddingTop: 10, borderTop: '1px solid var(--border-subtle)' }}>
                   <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Paper {pi + 1} Subtotal</span>
                   <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{livePapers[pi]?.totalScore.toFixed(1)} / {livePapers[pi]?.maxScore.toFixed(0)}</span>
                 </div>
               )}
             </div>
-          ))}
+          );})}
 
           {/* Live totals */}
           <div className="card" style={{ padding: 16, background: 'var(--bg-surface)' }}>

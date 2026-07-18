@@ -3,6 +3,7 @@ import {
   AreaChart, Area, BarChart, Bar, ScatterChart, Scatter,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Cell, PieChart, Pie, ReferenceLine, LabelList,
+  ReferenceDot, Label,
 } from 'recharts';
 import { TrendingUp, AlertTriangle, CheckCircle2, Flame, ChevronDown, Clock } from 'lucide-react';
 import { Mistake, Subject, ErrorCategory } from '../types';
@@ -35,40 +36,96 @@ const SUBJECT_SHORT: Record<Subject, string> = {
   'Organic Chemistry': 'OChem', 'Inorganic Chemistry': 'IChem',
 };
 
-const ChartTip = ({ active, payload, label }: any) => {
+interface ChartTipProps {
+  active?: boolean;
+  payload?: any[];
+  label?: string;
+  data?: { date: string; count: number }[];
+}
+
+const ChartTip = ({ active, payload, label, data }: ChartTipProps) => {
   if (!active || !payload?.length) return null;
+  const count = payload[0]?.value ?? 0;
+  const idx = data?.findIndex(d => d.date === label);
+  const prevCount = idx !== undefined && idx > 0 ? data![idx - 1].count : undefined;
+  const prevLabel = idx !== undefined && idx > 0 ? data![idx - 1].date : undefined;
+  const diff = prevCount !== undefined ? count - prevCount : undefined;
   return (
-    <div className="card" style={{ padding: '10px 12px', minWidth: 110 }}>
+    <div className="card" style={{ padding: '10px 12px', minWidth: 140 }}>
       {label && <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 4 }}>{label}</p>}
-      {payload.map((p: any, i: number) => (
-        <p key={i} style={{ fontSize: 13, fontWeight: 700, color: p.color || p.fill || 'var(--text-primary)' }}>
-          {p.name ?? p.dataKey}: {p.value}
-        </p>
-      ))}
+      <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>
+        {count} mistake{count === 1 ? '' : 's'} logged
+        {diff !== undefined && diff !== 0 && prevLabel && (
+          <span style={{ fontSize: 11, fontWeight: 600, color: diff > 0 ? 'var(--danger)' : 'var(--success)' }}>
+            {' '}({diff > 0 ? '+' : ''}{diff} vs {prevLabel})
+          </span>
+        )}
+        {diff === 0 && prevLabel && (
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)' }}> (same as {prevLabel})</span>
+        )}
+      </p>
     </div>
   );
 };
 
-const TrendChart = memo(({ data }: { data: { date: string; count: number }[] }) => (
-  <div style={{ height: 200 }}>
-    <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={data} margin={{ left: -20, right: 8, top: 4, bottom: 0 }}>
-        <defs>
-          <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.25} />
-            <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="0" stroke="var(--border-subtle)" vertical={false} />
-        <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }} stroke="transparent" />
-        <YAxis tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }} stroke="transparent" allowDecimals={false} width={24} />
-        <Tooltip content={<ChartTip />} />
-        <Area type="monotoneX" dataKey="count" name="Mistakes" stroke="var(--accent)" strokeWidth={3} fill="url(#trendGrad)"
-          dot={false} activeDot={{ r: 5, fill: 'var(--accent)', strokeWidth: 0 }} isAnimationActive={false} />
-      </AreaChart>
-    </ResponsiveContainer>
-  </div>
-));
+interface TrendChartProps {
+  data: { date: string; count: number }[];
+  mistakes: Mistake[];
+  filtered: Mistake[];
+  trendMode: TrendMode;
+  onPointClick?: (date: string, mistakes: Mistake[]) => void;
+}
+
+const TrendChart = memo(({ data, mistakes, filtered, trendMode, onPointClick }: TrendChartProps) => {
+  const last = data[data.length - 1];
+  const handleClick = (e: any) => {
+    if (!e || !e.activeLabel) return;
+    const dateLabel = e.activeLabel;
+    const idx = data.findIndex(d => d.date === dateLabel);
+    if (idx < 0) return;
+    const now = new Date();
+    let dayMistakes: Mistake[] = [];
+    if (trendMode === 'weekly') {
+      const weeks = eachWeekOfInterval({ start: subWeeks(now, 7), end: now }, { weekStartsOn: 1 }).slice(-8);
+      const ws = weeks[idx];
+      const wsStr = format(ws, 'yyyy-MM-dd');
+      const weStr = format(addDays(ws, 6), 'yyyy-MM-dd');
+      dayMistakes = filtered.filter(m => m.date >= wsStr && m.date <= weStr);
+    } else {
+      const months = eachMonthOfInterval({ start: subMonths(now, 5), end: now });
+      const ms = months[idx];
+      const prefix = format(ms, 'yyyy-MM');
+      dayMistakes = filtered.filter(m => m.date.startsWith(prefix));
+    }
+    onPointClick?.(dateLabel, dayMistakes);
+  };
+  return (
+    <div style={{ height: 200 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ left: 8, right: 12, top: 4, bottom: 0 }} onClick={handleClick}>
+          <defs>
+            <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.25} />
+              <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="0" stroke="var(--border-subtle)" vertical={false} />
+          <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }} stroke="transparent" />
+          <YAxis tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }} stroke="transparent" allowDecimals={false} width={36}
+            label={{ value: 'Mistakes logged', angle: -90, position: 'insideLeft', style: { fill: 'var(--text-tertiary)', fontSize: 10 } }} />
+          <Tooltip content={<ChartTip data={data} />} />
+          <Area type="monotoneX" dataKey="count" name="Mistakes" stroke="var(--accent)" strokeWidth={3} fill="url(#trendGrad)"
+            dot={false} activeDot={{ r: 5, fill: 'var(--accent)', strokeWidth: 0 }} isAnimationActive={false} />
+          {last && (
+            <ReferenceDot x={last.date} y={last.count} r={5} fill="var(--accent)" stroke="var(--bg-surface)" strokeWidth={2} isAnimationActive={false}>
+              <Label value={last.count} position="right" style={{ fill: 'var(--accent)', fontSize: 11, fontWeight: 700 }} />
+            </ReferenceDot>
+          )}
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+});
 TrendChart.displayName = 'TrendChart';
 
 const ChapterBarChart = memo(({ data }: { data: { name: string; active: number; mastered: number }[] }) => (
@@ -77,7 +134,8 @@ const ChapterBarChart = memo(({ data }: { data: { name: string; active: number; 
       <BarChart data={data} layout="vertical" margin={{ left: 0, right: 10, top: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="0" stroke="var(--border-subtle)" horizontal={false} />
         <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }} stroke="transparent" allowDecimals={false} />
-        <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }} stroke="transparent" width={72} />
+        <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }} stroke="transparent" width={72}
+          label={{ value: 'Count', angle: -90, position: 'insideLeft', style: { fill: 'var(--text-tertiary)', fontSize: 10 } }} />
         <Tooltip content={<ChartTip />} />
         <Bar dataKey="active" name="Active" stackId="a" fill="var(--warning)" radius={[0, 0, 0, 0]} isAnimationActive={false} />
         <Bar dataKey="mastered" name="Mastered" stackId="a" fill="var(--success)" radius={[0, 6, 6, 0]} isAnimationActive={false}>
@@ -95,7 +153,8 @@ const ScatterPlot = memo(({ data }: { data: { name: string; x: number; y: number
       <ScatterChart margin={{ left: 0, right: 10, top: 4, bottom: 0 }}>
         <CartesianGrid strokeDasharray="0" stroke="var(--border-subtle)" />
         <XAxis type="number" dataKey="x" name="Mistakes" tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }} stroke="transparent" label={{ value: 'Error Count', position: 'insideBottom', offset: -2, style: { fill: 'var(--text-tertiary)', fontSize: 10 } }} />
-        <YAxis type="number" dataKey="y" domain={[0.5, 3.5]} tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }} stroke="transparent" width={24} tickFormatter={(v: number) => v === 3 ? 'H' : v === 2 ? 'M' : v === 1 ? 'L' : ''} />
+        <YAxis type="number" dataKey="y" domain={[0.5, 3.5]} tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }} stroke="transparent" width={24} tickFormatter={(v: number) => v === 3 ? 'H' : v === 2 ? 'M' : v === 1 ? 'L' : ''}
+          label={{ value: 'Priority', angle: -90, position: 'insideLeft', style: { fill: 'var(--text-tertiary)', fontSize: 10 } }} />
         <ReferenceLine x={Math.max(1, Math.round(data.reduce((s, d) => s + d.x, 0) / Math.max(data.length, 1)))} stroke="var(--border-subtle)" />
         <ReferenceLine y={2} stroke="var(--border-subtle)" />
         <Tooltip content={({ active, payload }) => {
@@ -118,6 +177,7 @@ export function AnalyticsDashboard({ mistakes, onFilterLedger }: AnalyticsDashbo
   const [trendMode, setTrendMode] = useState<TrendMode>('weekly');
   const [subjectFilter, setSubjectFilter] = useState<Subject | 'all'>('all');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [popover, setPopover] = useState<{ date: string; mistakes: Mistake[] } | null>(null);
 
   const valid = Array.isArray(mistakes) ? mistakes : [];
   const filtered = useMemo(() => subjectFilter === 'all' ? valid : valid.filter(m => m.subject === subjectFilter), [valid, subjectFilter]);
@@ -259,7 +319,7 @@ export function AnalyticsDashboard({ mistakes, onFilterLedger }: AnalyticsDashbo
               ))}
             </div>
           </div>
-          {hasData ? <TrendChart data={trendData} /> : (
+          {hasData ? <TrendChart data={trendData} mistakes={mistakes} filtered={filtered} trendMode={trendMode} onPointClick={(date, ms) => setPopover({ date, mistakes: ms })} /> : (
             <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <p style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Log mistakes to see trends</p>
             </div>
@@ -413,6 +473,39 @@ export function AnalyticsDashboard({ mistakes, onFilterLedger }: AnalyticsDashbo
           )}
         </div>
       </div>
+
+      {/* Trend point detail popover */}
+      {popover && (
+        <div onClick={() => setPopover(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div className="card" onClick={e => e.stopPropagation()} style={{ padding: 24, maxWidth: 460, width: '100%', maxHeight: '80vh', overflowY: 'auto' }}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="card-title">{popover.date}</p>
+                <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{popover.mistakes.length} mistake{popover.mistakes.length === 1 ? '' : 's'} logged</p>
+              </div>
+              <button onClick={() => setPopover(null)} className="btn-ghost" style={{ padding: '6px 10px', fontSize: 12 }}>Close</button>
+            </div>
+            {popover.mistakes.length > 0 ? (
+              <div className="space-y-2">
+                {popover.mistakes.map(m => (
+                  <div key={m.id} className="flex items-center gap-3" style={{ padding: '10px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-card)' }}>
+                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: SUBJECT_HEX[m.subject] }} />
+                    <div className="flex-1 min-w-0">
+                      <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.chapter || 'Untitled'}</p>
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        <span className="badge" style={{ background: `${SUBJECT_HEX[m.subject]}15`, color: SUBJECT_HEX[m.subject], borderColor: `${SUBJECT_HEX[m.subject]}30` }}>{m.subject}</span>
+                        <span className="badge" style={{ background: `${CATEGORY_HEX[m.errorCategory]}15`, color: CATEGORY_HEX[m.errorCategory], borderColor: `${CATEGORY_HEX[m.errorCategory]}25` }}>{m.errorCategory}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={{ fontSize: 13, color: 'var(--text-tertiary)', textAlign: 'center', padding: '24px 0' }}>No mistakes logged in this period</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
