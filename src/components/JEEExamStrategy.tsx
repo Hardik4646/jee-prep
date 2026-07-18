@@ -13,7 +13,7 @@ const CARELESS: ErrorCategory[] = ['Calculation', 'Careless/Silly', 'Question Mi
 const CONCEPTUAL: ErrorCategory[] = ['Conceptual Gap', 'Formula Misapplication'];
 
 const SUBJECT_COLORS: Record<Subject, string> = {
-  Physics: '#38BDF8', Mathematics: '#4F6BFF', 'Physical Chemistry': '#F5A623',
+  Physics: '#38BDF8', Mathematics: '#FB923C', 'Physical Chemistry': '#F5A623',
   'Organic Chemistry': '#22C55E', 'Inorganic Chemistry': '#F5455C',
 };
 

@@ -15,13 +15,13 @@ interface DashboardProps {
 }
 
 const SUBJECT_COLORS: Record<Subject, string> = {
-  Physics: '#38BDF8', Mathematics: '#4F6BFF', 'Physical Chemistry': '#F5A623',
+  Physics: '#38BDF8', Mathematics: '#FB923C', 'Physical Chemistry': '#F5A623',
   'Organic Chemistry': '#22C55E', 'Inorganic Chemistry': '#F5455C',
 };
 
 const CATEGORY_COLORS: Record<ErrorCategory, string> = {
   'Calculation': '#F5A623', 'Conceptual Gap': '#38BDF8',
-  'Formula Misapplication': '#F5455C', 'Question Misread': '#4F6BFF', 'Careless/Silly': '#22C55E',
+  'Formula Misapplication': '#F5455C', 'Question Misread': '#FB923C', 'Careless/Silly': '#22C55E',
 };
 
 const PRIORITY_COLORS: Record<Priority, string> = { High: '#F5455C', Medium: '#F5A623', Low: '#5C5F70' };
@@ -233,7 +233,7 @@ export function Dashboard({ mistakes, gamification, setCurrentView }: DashboardP
               <div className="flex items-center gap-3">
                 <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{gamification.xp.toLocaleString()} XP</span>
                 <div className="flex items-center gap-1 px-2.5 py-1 rounded-[6px]"
-                  style={{ background: 'var(--accent-muted-bg)', border: '1px solid rgba(79,107,255,0.2)' }}>
+                  style={{ background: 'var(--accent-muted-bg)', border: '1px solid rgba(13,148,136,0.2)' }}>
                   <Zap size={10} style={{ color: 'var(--accent)' }} />
                   <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)' }}>+10 log · +50 master</span>
                 </div>
@@ -241,7 +241,7 @@ export function Dashboard({ mistakes, gamification, setCurrentView }: DashboardP
             </div>
             <div className="relative h-2.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-elevated)' }}>
               <div className="absolute inset-y-0 left-0 rounded-full transition-all duration-700"
-                style={{ width: `${xpProgress.progress}%`, background: 'var(--accent)', boxShadow: '0 0 12px rgba(79,107,255,0.2)' }} />
+                style={{ width: `${xpProgress.progress}%`, background: 'var(--accent)', boxShadow: '0 0 12px rgba(13,148,136,0.2)' }} />
             </div>
             <div className="flex justify-between mt-1.5">
               <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{xpProgress.current} / {xpProgress.required} XP to Level {level + 1}</span>
@@ -268,7 +268,7 @@ export function Dashboard({ mistakes, gamification, setCurrentView }: DashboardP
               <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>Mistakes logged per day</p>
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-[10px]"
-              style={{ background: 'var(--accent-muted-bg)', border: '1px solid rgba(79,107,255,0.2)' }}>
+              style={{ background: 'var(--accent-muted-bg)', border: '1px solid rgba(13,148,136,0.2)' }}>
               <TrendingUp size={13} style={{ color: 'var(--accent)' }} />
               <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)' }}>{trendData.reduce((s, d) => s + d.count, 0)} total</span>
             </div>
@@ -281,7 +281,7 @@ export function Dashboard({ mistakes, gamification, setCurrentView }: DashboardP
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-[10px] flex items-center justify-center"
-                style={{ background: 'var(--accent-muted-bg)', border: '1px solid rgba(79,107,255,0.2)' }}>
+                style={{ background: 'var(--accent-muted-bg)', border: '1px solid rgba(13,148,136,0.2)' }}>
                 <Sparkles size={13} style={{ color: 'var(--accent)' }} />
               </div>
               <span className="section-label">Review This</span>

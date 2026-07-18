@@ -18,12 +18,12 @@ const SUBJECTS: Subject[] = ['Physics', 'Mathematics', 'Physical Chemistry', 'Or
 const ERROR_CATEGORIES: ErrorCategory[] = ['Calculation', 'Conceptual Gap', 'Formula Misapplication', 'Question Misread', 'Careless/Silly'];
 
 const SUBJECT_HEX: Record<Subject, string> = {
-  Physics: '#38BDF8', Mathematics: '#4F6BFF', 'Physical Chemistry': '#F5A623',
+  Physics: '#38BDF8', Mathematics: '#FB923C', 'Physical Chemistry': '#F5A623',
   'Organic Chemistry': '#22C55E', 'Inorganic Chemistry': '#F5455C',
 };
 const CATEGORY_HEX: Record<ErrorCategory, string> = {
   'Calculation': '#F5A623', 'Conceptual Gap': '#38BDF8',
-  'Formula Misapplication': '#F5455C', 'Question Misread': '#4F6BFF', 'Careless/Silly': '#22C55E',
+  'Formula Misapplication': '#F5455C', 'Question Misread': '#FB923C', 'Careless/Silly': '#22C55E',
 };
 
 const CATEGORY_SHORT: Record<ErrorCategory, string> = {
@@ -344,7 +344,7 @@ export function AnalyticsDashboard({ mistakes, onFilterLedger }: AnalyticsDashbo
               </div>
               <div className="space-y-2 mt-3">
                 {categoryData.map(e => (
-                  <div key={e.name} onClick={() => { if (e.value > 0) setSelectedCategory(selectedCategory === e.name ? null : e.name); }} style={{ cursor: e.value > 0 ? 'pointer' : 'default', padding: '4px 8px', borderRadius: 'var(--radius-button)', background: selectedCategory === e.name ? 'var(--accent-muted-bg)' : 'transparent', border: '1px solid', borderColor: selectedCategory === e.name ? 'rgba(79,107,255,0.2)' : 'transparent', transition: 'all 150ms' }} className="flex items-center justify-between gap-2">
+                  <div key={e.name} onClick={() => { if (e.value > 0) setSelectedCategory(selectedCategory === e.name ? null : e.name); }} style={{ cursor: e.value > 0 ? 'pointer' : 'default', padding: '4px 8px', borderRadius: 'var(--radius-button)', background: selectedCategory === e.name ? 'var(--accent-muted-bg)' : 'transparent', border: '1px solid', borderColor: selectedCategory === e.name ? 'rgba(13,148,136,0.2)' : 'transparent', transition: 'all 150ms' }} className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: e.color, opacity: e.value > 0 ? 1 : 0.3 }} />
                       <span style={{ fontSize: 12, color: e.value > 0 ? 'var(--text-secondary)' : 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.name}</span>
@@ -354,7 +354,7 @@ export function AnalyticsDashboard({ mistakes, onFilterLedger }: AnalyticsDashbo
                 ))}
               </div>
               {selectedCategory && (
-                <div className="flex items-center justify-between mt-3" style={{ padding: '8px 12px', background: 'var(--accent-muted-bg)', borderRadius: 'var(--radius-button)', border: '1px solid rgba(79,107,255,0.2)' }}>
+                <div className="flex items-center justify-between mt-3" style={{ padding: '8px 12px', background: 'var(--accent-muted-bg)', borderRadius: 'var(--radius-button)', border: '1px solid rgba(13,148,136,0.2)' }}>
                   <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>Filtered: {selectedCategory}</span>
                   <button onClick={() => setSelectedCategory(null)} className="btn-ghost" style={{ padding: '4px 8px', fontSize: 11 }}>Clear</button>
                 </div>

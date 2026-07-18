@@ -48,7 +48,7 @@ export function TestHistory({ attempts, templates, onDelete }: {
       <div className="card" style={{ overflow: 'hidden' }}>
         <div className="flex items-center gap-2.5 flex-wrap" style={{ padding: '14px 18px' }}>
           <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tests…" className="field" style={{ flex: 1, minWidth: 160 }} />
-          <button onClick={() => setShowFilters(!showFilters)} className="btn-ghost" style={{ borderColor: showFilters || hasFilters ? 'rgba(79,107,255,0.4)' : undefined, color: showFilters || hasFilters ? 'var(--accent)' : undefined }}>Filters{hasFilters && <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--accent)', display: 'inline-block', marginLeft: 4 }} />}</button>
+          <button onClick={() => setShowFilters(!showFilters)} className="btn-ghost" style={{ borderColor: showFilters || hasFilters ? 'rgba(13,148,136,0.4)' : undefined, color: showFilters || hasFilters ? 'var(--accent)' : undefined }}>Filters{hasFilters && <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--accent)', display: 'inline-block', marginLeft: 4 }} />}</button>
           {hasFilters && <button onClick={clearFilters} className="btn-ghost" style={{ padding: '9px 12px' }}><X size={13} /></button>}
           <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{filtered.length}/{attempts.length}</span>
         </div>
@@ -105,7 +105,7 @@ function RowBlock({ a, idx, isOpen, onToggle, onDelete }: { a: TestAttempt; idx:
         <td style={{ padding: '14px 12px' }}><span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}>{a.totalScore.toFixed(1)}</span><span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}> / {a.maxScore}</span></td>
         <td style={{ padding: '14px 12px' }}><span style={{ fontSize: 14, fontWeight: 700, color: a.percentage >= 70 ? 'var(--success)' : a.percentage >= 50 ? 'var(--warning)' : 'var(--danger)' }}>{a.percentage.toFixed(1)}%</span></td>
         <td className="hidden md:table-cell" style={{ padding: '14px 12px', fontSize: 13, color: 'var(--text-secondary)' }}>{a.accuracy.toFixed(1)}%</td>
-        <td className="hidden lg:table-cell" style={{ padding: '14px 12px' }}><span className="badge" style={{ background: 'var(--accent-muted-bg)', color: 'var(--accent)', borderColor: 'rgba(79,107,255,0.2)' }}>{a.pattern === 'single' ? 'Single' : 'Dual'}</span></td>
+        <td className="hidden lg:table-cell" style={{ padding: '14px 12px' }}><span className="badge" style={{ background: 'var(--accent-muted-bg)', color: 'var(--accent)', borderColor: 'rgba(13,148,136,0.2)' }}>{a.pattern === 'single' ? 'Single' : 'Dual'}</span></td>
         <td style={{ padding: '14px 18px', textAlign: 'right' }}>
           <ChevronDown size={14} style={{ color: 'var(--text-tertiary)', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 200ms' }} />
         </td>

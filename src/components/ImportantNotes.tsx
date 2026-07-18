@@ -10,7 +10,7 @@ interface ImportantNotesProps {
 const SUBJECTS: Subject[] = ['Physics', 'Mathematics', 'Physical Chemistry', 'Organic Chemistry', 'Inorganic Chemistry'];
 const SUBJECT_COLORS: Record<Subject, { hex: string; bg: string; border: string; text: string }> = {
   Physics:               { hex: '#38BDF8', bg: 'rgba(56,189,248,0.12)',  border: 'rgba(56,189,248,0.25)',  text: '#38BDF8' },
-  Mathematics:           { hex: '#4F6BFF', bg: 'rgba(79,107,255,0.12)',  border: 'rgba(79,107,255,0.25)',  text: '#4F6BFF' },
+  Mathematics:           { hex: '#FB923C', bg: 'rgba(251,146,60,0.12)',  border: 'rgba(251,146,60,0.25)',  text: '#FB923C' },
   'Physical Chemistry':  { hex: '#F5A623', bg: 'rgba(245,166,35,0.12)',  border: 'rgba(245,166,35,0.25)',  text: '#F5A623' },
   'Organic Chemistry':   { hex: '#22C55E', bg: 'rgba(34,197,94,0.12)',   border: 'rgba(34,197,94,0.25)',   text: '#22C55E' },
   'Inorganic Chemistry': { hex: '#F5455C', bg: 'rgba(245,69,92,0.12)',   border: 'rgba(245,69,92,0.25)',   text: '#F5455C' },
@@ -96,7 +96,7 @@ export function ImportantNotes({ notes, setNotes }: ImportantNotesProps) {
             const sc = s !== 'all' ? SUBJECT_COLORS[s as Subject] : null;
             return (
               <button key={s} onClick={() => setSubjectFilter(s as any)}
-                style={{ padding: '6px 12px', borderRadius: 'var(--radius-badge)', fontSize: 11, fontWeight: 600, cursor: 'pointer', border: '1px solid', borderColor: active ? (sc?.border ?? 'rgba(79,107,255,0.4)') : 'var(--border-subtle)', background: active ? (sc?.bg ?? 'var(--accent-muted-bg)') : 'var(--bg-elevated)', color: active ? (sc?.text ?? 'var(--accent)') : 'var(--text-secondary)', transition: 'all 150ms' }}>
+                style={{ padding: '6px 12px', borderRadius: 'var(--radius-badge)', fontSize: 11, fontWeight: 600, cursor: 'pointer', border: '1px solid', borderColor: active ? (sc?.border ?? 'rgba(13,148,136,0.4)') : 'var(--border-subtle)', background: active ? (sc?.bg ?? 'var(--accent-muted-bg)') : 'var(--bg-elevated)', color: active ? (sc?.text ?? 'var(--accent)') : 'var(--text-secondary)', transition: 'all 150ms' }}>
                 {s === 'all' ? 'All' : s.split(' ')[0]}
               </button>
             );

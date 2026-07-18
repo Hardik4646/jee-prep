@@ -381,7 +381,7 @@ export function TestAnalytics({ attempts, templates }: { attempts: TestAttempt[]
   const subjectTrend = useMemo(() => {
     const subjectNames = new Set<string>();
     filtered.forEach(a => a.papers.forEach(p => p.subjects.forEach(s => subjectNames.add(s.subjectName))));
-    const colors = ['#4F6BFF', '#38BDF8', '#F5A623', '#22C55E', '#F5455C', '#9A9DAD'];
+    const colors = ['#0D9488', '#38BDF8', '#F5A623', '#22C55E', '#F5455C', '#9A9DAD'];
     const subjectList = Array.from(subjectNames);
     return {
       data: filtered.map((a, i) => {
@@ -408,7 +408,7 @@ export function TestAnalytics({ attempts, templates }: { attempts: TestAttempt[]
         combined: a.totalScore,
       })),
       lines: [
-        { key: 'paper1', name: 'Paper 1', color: '#4F6BFF' },
+        { key: 'paper1', name: 'Paper 1', color: '#0D9488' },
         { key: 'paper2', name: 'Paper 2', color: '#F5A623' },
         { key: 'combined', name: 'Combined', color: '#22C55E' },
       ],
@@ -541,7 +541,7 @@ export function TestAnalytics({ attempts, templates }: { attempts: TestAttempt[]
             {chartMode === 'total' && (
               <TrendChart
                 data={trendData}
-                lines={[{ key: 'total', name: 'Score', color: '#4F6BFF' }, { key: 'percentage', name: 'Percentage', color: '#22C55E' }]}
+                lines={[{ key: 'total', name: 'Score', color: '#0D9488' }, { key: 'percentage', name: 'Percentage', color: '#22C55E' }]}
                 yAxisLabel="Score"
                 attempts={filtered}
                 percentageKeys={['percentage']}
@@ -609,7 +609,7 @@ export function TestAnalytics({ attempts, templates }: { attempts: TestAttempt[]
         <div className="card" style={{ padding: 24 }}>
           <div className="flex items-center gap-2" style={{ marginBottom: 14 }}>
             <div className="w-8 h-8 rounded-[10px] flex items-center justify-center flex-shrink-0"
-              style={{ background: 'var(--accent-muted-bg)', border: '1px solid rgba(79,107,255,0.2)' }}>
+              style={{ background: 'var(--accent-muted-bg)', border: '1px solid rgba(13,148,136,0.2)' }}>
               <Sparkles size={15} style={{ color: 'var(--accent)' }} />
             </div>
             <p className="card-title">Coach's Notes</p>
