@@ -1,29 +1,38 @@
 import { useState, useMemo } from 'react';
 import { X, Plus, Save, ChevronDown, CheckCircle2, Target, AlertTriangle, Star } from 'lucide-react';
 import { ExamTemplate, TestAttempt, TestSourceType, SubjectScore, PaperScore } from '../../types';
-import { genId, computeSubjectScore, computePaperScore, TEST_TYPES } from './helpers';
+import { genId, computeSubjectScore, computePaperScore, subjectMaxScore, TEST_TYPES } from './helpers';
 import { format } from 'date-fns';
 
 interface LogTestProps {
   templates: ExamTemplate[];
   onSave: (a: TestAttempt, wrongQuestions: { chapter: string; errorCategory: string }[]) => void;
   onCancel: () => void;
+  editing?: TestAttempt | null;
 }
 
-export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
-  const [step, setStep] = useState(1);
-  const [templateId, setTemplateId] = useState('');
-  const [attemptName, setAttemptName] = useState('');
-  const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [testType, setTestType] = useState<TestSourceType>('Mock Test');
-  const [timeTaken, setTimeTaken] = useState('');
-  const [difficulty, setDifficulty] = useState(0);
-  const [notes, setNotes] = useState('');
-  const [entryMode, setEntryMode] = useState<'counts' | 'marks' | 'manual'>('counts');
-  const [paperInputs, setPaperInputs] = useState<{ correct: string; incorrect: string; unattempted: string }[][]>([]);
-  const [directMarks, setDirectMarks] = useState<string[]>([]);
-  const [manualInputs, setManualInputs] = useState<{ marksObtained: string; negativeMarks: string; correct: string; incorrect: string; unattempted: string }[][]>([]);
-  const [percentile, setPercentile] = useState('');
+export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) {
+  const [step, setStep] = useState(editing ? 2 : 1);
+  const [templateId, setTemplateId] = useState(editing?.templateId ?? '');
+  const [attemptName, setAttemptName] = useState(editing?.attemptName ?? '');
+  const [date, setDate] = useState(editing?.date ?? format(new Date(), 'yyyy-MM-dd'));
+  const [testType, setTestType] = useState<TestSourceType>(editing?.testType ?? 'Mock Test');
+  const [timeTaken, setTimeTaken] = useState(editing?.timeTakenMinutes ? String(editing.timeTakenMinutes) : '');
+  const [difficulty, setDifficulty] = useState(editing?.difficultyRating ?? 0);
+  const [notes, setNotes] = useState(editing?.notes ?? '');
+  const [entryMode, setEntryMode] = useState<'counts' | 'marks' | 'manual'>(() => {
+    if (!editing) return 'counts';
+    const tpl = templates.find(t => t.id === editing.templateId);
+    return tpl?.marksPreset.every(Boolean) ? 'counts' : 'manual';
+  });
+  const [paperInputs, setPaperInputs] = useState<{ correct: string; incorrect: string; unattempted: string }[][]>(() =>
+    editing ? editing.papers.map(p => p.subjects.map(s => ({ correct: String(s.correct), incorrect: String(s.incorrect), unattempted: String(s.unattempted) }))) : []
+  );
+  const [directMarks, setDirectMarks] = useState<string[]>(() => editing ? editing.papers.map(p => String(p.totalScore)) : []);
+  const [manualInputs, setManualInputs] = useState<{ marksObtained: string; negativeMarks: string; correct: string; incorrect: string; unattempted: string }[][]>(() =>
+    editing ? editing.papers.map(p => p.subjects.map(s => ({ marksObtained: String(s.score), negativeMarks: '0', correct: String(s.correct), incorrect: String(s.incorrect), unattempted: String(s.unattempted) }))) : []
+  );
+  const [percentile, setPercentile] = useState(editing?.percentile ? String(editing.percentile) : '');
   const [targetScore, setTargetScore] = useState('');
   const [addToLedger, setAddToLedger] = useState(false);
   const [wrongQuestions, setWrongQuestions] = useState<{ chapter: string; errorCategory: string }[]>([]);
@@ -48,8 +57,8 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
       if (mode === 'marks') {
         const dm = parseFloat(directMarks[pi] ?? '') || 0;
         return {
-          subjects: paper.map(s => ({ subjectName: s.name, correct: 0, incorrect: 0, unattempted: 0, score: 0, maxScore: s.numQuestions * s.marksPerCorrect, accuracy: 0 })),
-          totalScore: dm, maxScore: paper.reduce((a, s) => a + s.numQuestions * s.marksPerCorrect, 0),
+          subjects: paper.map(s => ({ subjectName: s.name, correct: 0, incorrect: 0, unattempted: 0, score: 0, maxScore: subjectMaxScore(s, template), accuracy: 0 })),
+          totalScore: dm, maxScore: paper.reduce((a, s) => a + subjectMaxScore(s, template), 0),
           totalCorrect: 0, totalIncorrect: 0, totalUnattempted: 0,
           totalQuestions: paper.reduce((a, s) => a + s.numQuestions, 0), accuracy: 0,
         };
@@ -63,7 +72,7 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
           const correct = parseInt(inp.correct) || 0;
           const incorrect = parseInt(inp.incorrect) || 0;
           const unattempted = parseInt(inp.unattempted) || 0;
-          const maxScore = s.numQuestions * s.marksPerCorrect;
+          const maxScore = subjectMaxScore(s, template);
           const attempted = correct + incorrect;
           const accuracy = attempted > 0 ? (correct / attempted) * 100 : 0;
           return { subjectName: s.name, correct, incorrect, unattempted, score: score - neg, maxScore, accuracy };
@@ -86,7 +95,7 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
         correct: parseInt(i?.correct ?? '') || 0,
         incorrect: parseInt(i?.incorrect ?? '') || 0,
         unattempted: parseInt(i?.unattempted ?? '') || 0,
-      })));
+      })), template);
     });
   }, [template, paperInputs, directMarks, manualInputs, entryMode]);
 
@@ -119,13 +128,13 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
   }, [template, paperInputs, manualInputs, entryMode]);
 
   const target = parseFloat(targetScore) || 0;
-  const achieved = target > 0 && liveTotal >= target;
+  const achieved = target > 0 ? liveTotal >= target : (editing?.targetAchieved ?? false);
   const canSave = !!template && attemptName.trim().length > 0 && liveMax > 0;
 
   const handleSave = () => {
     if (!template || !canSave) return;
     const attempt: TestAttempt = {
-      id: genId(), templateId: template.id, templateName: template.name, pattern: template.pattern,
+      id: editing?.id ?? genId(), templateId: template.id, templateName: template.name, pattern: template.pattern,
       testType, attemptName: attemptName.trim(), date,
       timeTakenMinutes: timeTaken ? parseInt(timeTaken) : undefined,
       difficultyRating: difficulty || undefined,
@@ -135,7 +144,7 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
       totalCorrect: liveCorrect, totalIncorrect: liveIncorrect, totalUnattempted: liveUnattempted,
       totalQuestions: liveTotalQ, marksLostToNegative: liveMarksLost,
       percentile: percentile ? parseFloat(percentile) : undefined,
-      targetAchieved: achieved, createdAt: Date.now(),
+      targetAchieved: achieved, createdAt: editing?.createdAt ?? Date.now(),
     };
     onSave(attempt, addToLedger ? wrongQuestions : []);
   };
@@ -154,7 +163,7 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
   return (
     <div className="card animate-slide-down" style={{ padding: 24 }}>
       <div className="flex items-center justify-between mb-5">
-        <h3 className="card-title">Log Test Attempt</h3>
+        <h3 className="card-title">{editing ? 'Edit Test Attempt' : 'Log Test Attempt'}</h3>
         <button onClick={onCancel} className="btn-ghost" style={{ padding: '7px 9px' }}><X size={15} /></button>
       </div>
 
@@ -257,7 +266,7 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
                 <div className="space-y-2">
                   {paper.map((s, si) => {
                     const inp = paperInputs[pi]?.[si] ?? { correct: '', incorrect: '', unattempted: '' };
-                    const sc: SubjectScore = computeSubjectScore(s, parseInt(inp.correct) || 0, parseInt(inp.incorrect) || 0, parseInt(inp.unattempted) || 0);
+                    const sc: SubjectScore = computeSubjectScore(s, parseInt(inp.correct) || 0, parseInt(inp.incorrect) || 0, parseInt(inp.unattempted) || 0, template);
                     return (
                       <div key={s.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end" style={{ padding: '10px 12px', background: 'var(--bg-surface)', borderRadius: 'var(--radius-button)', border: '1px solid var(--border-subtle)' }}>
                         <div className="md:col-span-3">
@@ -280,7 +289,7 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
                   {paper.map((s, si) => {
                     const inp = manualInputs[pi]?.[si] ?? { marksObtained: '', negativeMarks: '', correct: '', incorrect: '', unattempted: '' };
                     const score = (parseFloat(inp.marksObtained) || 0) - (parseFloat(inp.negativeMarks) || 0);
-                    const maxScore = s.numQuestions * s.marksPerCorrect;
+                    const maxScore = subjectMaxScore(s, template);
                     const correct = parseInt(inp.correct) || 0;
                     const wrong = parseInt(inp.incorrect) || 0;
                     const unattempted = parseInt(inp.unattempted) || 0;
@@ -311,7 +320,7 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
               ) : (
                 <div>
                   <label className="field-label">Total Marks for Paper {pi + 1}</label>
-                  <input type="number" step="0.5" className="field" style={{ fontSize: 18, fontWeight: 700 }} value={directMarks[pi] ?? ''} onChange={e => { const nd = [...directMarks]; nd[pi] = e.target.value; setDirectMarks(nd); }} placeholder={`Max: ${paper.reduce((a, s) => a + s.numQuestions * s.marksPerCorrect, 0)}`} />
+                  <input type="number" step="0.5" className="field" style={{ fontSize: 18, fontWeight: 700 }} value={directMarks[pi] ?? ''} onChange={e => { const nd = [...directMarks]; nd[pi] = e.target.value; setDirectMarks(nd); }} placeholder={`Max: ${paper.reduce((a, s) => a + subjectMaxScore(s, template), 0)}`} />
                 </div>
               )}
               {paperMode !== 'marks' && (
@@ -384,7 +393,7 @@ export function LogTest({ templates, onSave, onCancel }: LogTestProps) {
 
           <div className="flex justify-between">
             <button onClick={() => setStep(3)} className="btn-ghost">Back</button>
-            <button onClick={handleSave} className="btn-primary" style={{ background: 'var(--success)' }}><Save size={14} />Save Test +30 XP</button>
+            <button onClick={handleSave} className="btn-primary" style={{ background: 'var(--success)' }}><Save size={14} />{editing ? 'Update Test' : 'Save Test +30 XP'}</button>
           </div>
         </div>
       )}
