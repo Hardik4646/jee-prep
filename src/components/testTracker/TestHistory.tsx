@@ -1,12 +1,12 @@
 import { useState, useMemo } from 'react';
-import { X, ChevronDown, CheckCircle2, Clock, Trash2, ClipboardList } from 'lucide-react';
+import { X, ChevronDown, CheckCircle2, Clock, Trash2, ClipboardList, Pencil } from 'lucide-react';
 import { ExamTemplate, TestAttempt } from '../../types';
 import { TEST_TYPES } from './helpers';
 import { format, parseISO } from 'date-fns';
 
-export function TestHistory({ attempts, templates, onDelete }: {
+export function TestHistory({ attempts, templates, onDelete, onEdit }: {
   attempts: TestAttempt[]; templates: ExamTemplate[];
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => void; onEdit: (attempt: TestAttempt) => void;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -79,7 +79,7 @@ export function TestHistory({ attempts, templates, onDelete }: {
             {filtered.map((a, idx) => {
               const isOpen = expanded === a.id;
               return (
-                <RowBlock key={a.id} a={a} idx={idx} isOpen={isOpen} onToggle={() => setExpanded(isOpen ? null : a.id)} onDelete={onDelete} />
+                <RowBlock key={a.id} a={a} idx={idx} isOpen={isOpen} onToggle={() => setExpanded(isOpen ? null : a.id)} onDelete={onDelete} onEdit={onEdit} />
               );
             })}
           </tbody>
@@ -89,7 +89,7 @@ export function TestHistory({ attempts, templates, onDelete }: {
   );
 }
 
-function RowBlock({ a, idx, isOpen, onToggle, onDelete }: { a: TestAttempt; idx: number; isOpen: boolean; onToggle: () => void; onDelete: (id: string) => void }) {
+function RowBlock({ a, idx, isOpen, onToggle, onDelete, onEdit }: { a: TestAttempt; idx: number; isOpen: boolean; onToggle: () => void; onDelete: (id: string) => void; onEdit: (attempt: TestAttempt) => void }) {
   return (
     <>
       <tr onClick={onToggle} style={{ borderBottom: '1px solid var(--border-subtle)', background: isOpen ? 'var(--accent-muted-bg)' : idx % 2 ? 'var(--bg-elevated)' : 'transparent', cursor: 'pointer' }}>
@@ -140,6 +140,7 @@ function RowBlock({ a, idx, isOpen, onToggle, onDelete }: { a: TestAttempt; idx:
                 {a.notes && <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic' }}>"{a.notes}"</span>}
               </div>
               <div className="flex gap-2">
+                <button onClick={() => onEdit(a)} className="btn-ghost" style={{ fontSize: 12, padding: '7px 12px', borderColor: 'rgba(13,148,136,0.3)', color: 'var(--accent)' }}><Pencil size={12} />Edit</button>
                 <button onClick={() => onDelete(a.id)} className="btn-ghost" style={{ fontSize: 12, padding: '7px 12px', borderColor: 'rgba(245,69,92,0.2)', color: 'var(--danger)' }}><Trash2 size={12} />Delete</button>
               </div>
             </div>

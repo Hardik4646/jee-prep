@@ -24,6 +24,7 @@ export function TestTracker({ templates, setTemplates, attempts, setAttempts, se
   const [showTemplateBuilder, setShowTemplateBuilder] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<ExamTemplate | null>(null);
   const [showLogTest, setShowLogTest] = useState(false);
+  const [editingAttempt, setEditingAttempt] = useState<TestAttempt | null>(null);
 
   const handleSaveTemplate = useCallback((tpl: ExamTemplate) => {
     setTemplates(prev => {
@@ -45,18 +46,32 @@ export function TestTracker({ templates, setTemplates, attempts, setAttempts, se
   };
 
   const handleSaveAttempt = useCallback((attempt: TestAttempt, wrongQuestions: { chapter: string; errorCategory: string }[]) => {
-    setAttempts(prev => [attempt, ...(Array.isArray(prev) ? prev : [])]);
-    setTemplates(prev => (Array.isArray(prev) ? prev : []).map(t => t.id === attempt.templateId ? { ...t, timesUsed: t.timesUsed + 1 } : t));
-    onXP(30);
-    if (wrongQuestions.length > 0) {
-      const newMistakes = createMistakesFromTest(attempt, wrongQuestions);
-      if (newMistakes.length > 0) setMistakes(prev => [...newMistakes, ...(Array.isArray(prev) ? prev : [])]);
+    setAttempts(prev => {
+      const arr = Array.isArray(prev) ? prev : [];
+      const exists = arr.some(a => a.id === attempt.id);
+      return exists ? arr.map(a => a.id === attempt.id ? attempt : a) : [attempt, ...arr];
+    });
+    if (!editingAttempt) {
+      // Only award XP / bump template usage / create ledger mistakes for genuinely new attempts —
+      // editing an existing one is a correction, not a new study session.
+      setTemplates(prev => (Array.isArray(prev) ? prev : []).map(t => t.id === attempt.templateId ? { ...t, timesUsed: t.timesUsed + 1 } : t));
+      onXP(30);
+      if (wrongQuestions.length > 0) {
+        const newMistakes = createMistakesFromTest(attempt, wrongQuestions);
+        if (newMistakes.length > 0) setMistakes(prev => [...newMistakes, ...(Array.isArray(prev) ? prev : [])]);
+      }
     }
     setShowLogTest(false);
-  }, [setAttempts, setTemplates, setMistakes, onXP]);
+    setEditingAttempt(null);
+  }, [setAttempts, setTemplates, setMistakes, onXP, editingAttempt]);
 
   const handleDeleteAttempt = (id: string) => {
     setAttempts(prev => (Array.isArray(prev) ? prev : []).filter(a => a.id !== id));
+  };
+
+  const handleEditAttempt = (attempt: TestAttempt) => {
+    setEditingAttempt(attempt);
+    setShowLogTest(true);
   };
 
   return (
@@ -68,7 +83,7 @@ export function TestTracker({ templates, setTemplates, attempts, setAttempts, se
         </div>
         <div className="flex gap-2">
           <button onClick={() => { setEditingTemplate(null); setShowTemplateBuilder(true); }} className="btn-ghost"><Plus size={15} />Template</button>
-          <button onClick={() => setShowLogTest(true)} className="btn-primary"><Plus size={15} />Log Test<span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginLeft: 2 }}>+30 XP</span></button>
+          <button onClick={() => { setEditingAttempt(null); setShowLogTest(true); }} className="btn-primary"><Plus size={15} />Log Test<span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginLeft: 2 }}>+30 XP</span></button>
         </div>
       </div>
 
@@ -88,11 +103,11 @@ export function TestTracker({ templates, setTemplates, attempts, setAttempts, se
       </div>
 
       {showTemplateBuilder && <TemplateBuilder onSave={handleSaveTemplate} onCancel={() => { setShowTemplateBuilder(false); setEditingTemplate(null); }} editing={editingTemplate} />}
-      {showLogTest && <LogTest templates={templates} onSave={handleSaveAttempt} onCancel={() => setShowLogTest(false)} />}
+      {showLogTest && <LogTest templates={templates} onSave={handleSaveAttempt} onCancel={() => { setShowLogTest(false); setEditingAttempt(null); }} editing={editingAttempt} />}
 
       {!showTemplateBuilder && !showLogTest && (
         <>
-          {tab === 'history' && <TestHistory attempts={attempts} templates={templates} onDelete={handleDeleteAttempt} />}
+          {tab === 'history' && <TestHistory attempts={attempts} templates={templates} onDelete={handleDeleteAttempt} onEdit={handleEditAttempt} />}
           {tab === 'analytics' && <TestAnalytics attempts={attempts} templates={templates} />}
           {tab === 'templates' && <TemplateLibrary templates={templates} attempts={attempts} onEdit={t => { setEditingTemplate(t); setShowTemplateBuilder(true); }} onDuplicate={handleDuplicateTemplate} onDelete={handleDeleteTemplate} onCreate={() => { setEditingTemplate(null); setShowTemplateBuilder(true); }} />}
         </>

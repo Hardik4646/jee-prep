@@ -1,4 +1,4 @@
-import { TestAttempt, TemplateSubject, SubjectScore, PaperScore, TestSourceType, Mistake, Subject } from '../../types';
+import { TestAttempt, TemplateSubject, SubjectScore, PaperScore, TestSourceType, Mistake, Subject, ExamTemplate } from '../../types';
 
 export const genId = () => Math.random().toString(36).substr(2, 9);
 export const DEFAULT_SUBJECTS = ['Physics', 'Chemistry', 'Mathematics'];
@@ -8,16 +8,32 @@ export function blankSubject(name: string): TemplateSubject {
   return { id: genId(), name, numQuestions: 30, marksPerCorrect: 4, negativePerWrong: -1, partialMarking: false };
 }
 
-export function computeSubjectScore(s: TemplateSubject, correct: number, incorrect: number, unattempted: number): SubjectScore {
+/**
+ * A subject's max marks should come from the template's manual total-marks
+ * override (proportionally split by question share) when one is set —
+ * NOT always recomputed as numQuestions * marksPerCorrect. Recomputing it
+ * that way silently discarded a manually-entered total (e.g. a template set
+ * to 360 total marks across 96 questions would render as 384 = 96 * 4,
+ * ignoring the override entirely).
+ */
+export function subjectMaxScore(s: TemplateSubject, template?: ExamTemplate): number {
+  if (!template?.manualOverride || !template.totalMaxMarks || !template.totalQuestions) {
+    return s.numQuestions * s.marksPerCorrect;
+  }
+  const share = s.numQuestions / template.totalQuestions;
+  return share * template.totalMaxMarks;
+}
+
+export function computeSubjectScore(s: TemplateSubject, correct: number, incorrect: number, unattempted: number, template?: ExamTemplate): SubjectScore {
   const score = correct * s.marksPerCorrect + incorrect * s.negativePerWrong;
-  const maxScore = s.numQuestions * s.marksPerCorrect;
+  const maxScore = subjectMaxScore(s, template);
   const attempted = correct + incorrect;
   const accuracy = attempted > 0 ? (correct / attempted) * 100 : 0;
   return { subjectName: s.name, correct, incorrect, unattempted, score, maxScore, accuracy };
 }
 
-export function computePaperScore(subjects: TemplateSubject[], scores: { correct: number; incorrect: number; unattempted: number }[]): PaperScore {
-  const subjScores = subjects.map((s, i) => computeSubjectScore(s, scores[i]?.correct ?? 0, scores[i]?.incorrect ?? 0, scores[i]?.unattempted ?? 0));
+export function computePaperScore(subjects: TemplateSubject[], scores: { correct: number; incorrect: number; unattempted: number }[], template?: ExamTemplate): PaperScore {
+  const subjScores = subjects.map((s, i) => computeSubjectScore(s, scores[i]?.correct ?? 0, scores[i]?.incorrect ?? 0, scores[i]?.unattempted ?? 0, template));
   const totalScore = subjScores.reduce((a, b) => a + b.score, 0);
   const maxScore = subjScores.reduce((a, b) => a + b.maxScore, 0);
   const totalCorrect = subjScores.reduce((a, b) => a + b.correct, 0);

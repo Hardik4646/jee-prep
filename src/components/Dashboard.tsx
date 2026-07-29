@@ -107,6 +107,83 @@ const TrendChart = memo(({ data, mistakes, onPointClick }: TrendChartProps) => {
 });
 TrendChart.displayName = 'TrendChart';
 
+function FlashCard({ mistake, onNext }: { mistake: Mistake; onNext: () => void }) {
+  const [flipped, setFlipped] = useState(false);
+  const subjectColor = SUBJECT_COLORS[mistake.subject];
+
+  return (
+    <div>
+      <div
+        onClick={() => setFlipped(f => !f)}
+        style={{ perspective: 1200, cursor: 'pointer' }}
+      >
+        <div
+          style={{
+            position: 'relative', minHeight: 172, transformStyle: 'preserve-3d',
+            transition: 'transform 0.55s cubic-bezier(0.4, 0.2, 0.2, 1)',
+            transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+          }}
+        >
+          {/* FRONT — the prompt: what/where the mistake was, inviting a tap to reveal it */}
+          <div style={{
+            position: flipped ? 'absolute' : 'relative', inset: 0, backfaceVisibility: 'hidden',
+            borderRadius: 'var(--radius-card)', overflow: 'hidden',
+            border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)',
+          }}>
+            <div style={{ height: 4, background: subjectColor }} />
+            <div style={{ padding: '18px 20px' }}>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                <span className="badge" style={{ background: `${subjectColor}15`, color: subjectColor, borderColor: `${subjectColor}30` }}>{mistake.subject}</span>
+                <span className="badge" style={{ background: `${PRIORITY_COLORS[mistake.priority]}15`, color: PRIORITY_COLORS[mistake.priority], borderColor: `${PRIORITY_COLORS[mistake.priority]}25` }}>{mistake.priority} priority</span>
+              </div>
+              <p style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.35 }}>{mistake.chapter || 'Untitled'}</p>
+              <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>{mistake.errorCategory}</p>
+              <div className="flex items-center gap-1.5" style={{ marginTop: 20, color: 'var(--accent)' }}>
+                <Sparkles size={13} />
+                <span style={{ fontSize: 12, fontWeight: 600 }}>Tap to recall what went wrong</span>
+              </div>
+            </div>
+          </div>
+
+          {/* BACK — the actual note / what to remember */}
+          <div style={{
+            position: flipped ? 'relative' : 'absolute', inset: 0, backfaceVisibility: 'hidden',
+            transform: 'rotateY(180deg)', borderRadius: 'var(--radius-card)', overflow: 'hidden',
+            border: `1px solid ${subjectColor}35`, background: 'var(--bg-elevated)',
+            display: 'flex', flexDirection: 'column',
+          }}>
+            <div style={{ height: 4, background: subjectColor }} />
+            <div style={{ padding: '18px 20px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div className="flex items-center justify-between mb-2">
+                <span style={{ fontSize: 12, fontWeight: 700, color: subjectColor, textTransform: 'uppercase', letterSpacing: '0.04em' }}>What went wrong</span>
+                <span className="badge" style={{ background: `${STATUS_COLORS[mistake.status]}15`, color: STATUS_COLORS[mistake.status], borderColor: `${STATUS_COLORS[mistake.status]}25` }}>
+                  {mistake.status === 'Mastered' ? 'Mastered' : 'Active'}
+                </span>
+              </div>
+              <p className="line-clamp-4" style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.65, flex: 1 }}>
+                {mistake.notes || 'No notes added for this one — open it in the Ledger to add detail.'}
+              </p>
+              <div className="flex items-center justify-between" style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Logged {format(new Date(mistake.createdAt), 'MMM d, yyyy')}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Reviewed {mistake.reviewCount ?? 0}×</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-center" style={{ marginTop: 12 }}>
+        <button
+          onClick={(e) => { e.stopPropagation(); setFlipped(false); onNext(); }}
+          className="btn-ghost" style={{ fontSize: 12, padding: '7px 14px' }}
+        >
+          <RefreshCw size={12} />Next Card
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function KPICard({ label, value, sub, icon: Icon, iconColor, iconBg, onClick }: {
   label: string; value: string | number; sub?: string;
   icon: any; iconColor: string; iconBg: string; onClick?: () => void;
@@ -276,7 +353,7 @@ export function Dashboard({ mistakes, gamification, setCurrentView }: DashboardP
           <TrendChart data={trendData} mistakes={validMistakes} onPointClick={(date, ms) => setPopover({ date, mistakes: ms })} />
         </div>
 
-        {/* Random Mistake */}
+        {/* Random Mistake — flip flashcard instead of a static info box */}
         <div className="card lg:col-span-2" style={{ padding: '24px' }}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -285,6 +362,9 @@ export function Dashboard({ mistakes, gamification, setCurrentView }: DashboardP
                 <Sparkles size={13} style={{ color: 'var(--accent)' }} />
               </div>
               <span className="section-label">Review This</span>
+              {validMistakes.length > 0 && (
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{(randomIndex % validMistakes.length) + 1} / {validMistakes.length}</span>
+              )}
             </div>
             <button onClick={nextRandom} className="btn-ghost" style={{ padding: '6px 10px', fontSize: 12 }}>
               <RefreshCw size={12} />Next
@@ -292,27 +372,7 @@ export function Dashboard({ mistakes, gamification, setCurrentView }: DashboardP
           </div>
 
           {randomMistake ? (
-            <div className="space-y-3">
-              <div className="flex flex-wrap gap-1.5">
-                <span className="badge" style={{ background: `${SUBJECT_COLORS[randomMistake.subject]}15`, color: SUBJECT_COLORS[randomMistake.subject], borderColor: `${SUBJECT_COLORS[randomMistake.subject]}30` }}>{randomMistake.subject}</span>
-                <span className="badge" style={{ background: `${CATEGORY_COLORS[randomMistake.errorCategory]}15`, color: CATEGORY_COLORS[randomMistake.errorCategory], borderColor: `${CATEGORY_COLORS[randomMistake.errorCategory]}25` }}>{randomMistake.errorCategory}</span>
-                <span className="badge" style={{ background: `${PRIORITY_COLORS[randomMistake.priority]}15`, color: PRIORITY_COLORS[randomMistake.priority], borderColor: `${PRIORITY_COLORS[randomMistake.priority]}25` }}>{randomMistake.priority}</span>
-              </div>
-              <div>
-                <p className="card-title" style={{ marginBottom: 6 }}>{randomMistake.chapter || 'Untitled'}</p>
-                {randomMistake.notes && (
-                  <div className="line-clamp-3" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-card)', padding: 14, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                    {randomMistake.notes}
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center justify-between">
-                <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{format(new Date(randomMistake.createdAt), 'MMM d, yyyy')}</span>
-                <span className="badge" style={{ background: `${STATUS_COLORS[randomMistake.status]}15`, color: STATUS_COLORS[randomMistake.status], borderColor: `${STATUS_COLORS[randomMistake.status]}25` }}>
-                  {randomMistake.status === 'Mastered' ? 'Mastered' : 'Active'}
-                </span>
-              </div>
-            </div>
+            <FlashCard key={randomMistake.id} mistake={randomMistake} onNext={nextRandom} />
           ) : (
             <div className="flex flex-col items-center justify-center py-8 gap-3">
               <div className="w-12 h-12 rounded-[16px] flex items-center justify-center"
