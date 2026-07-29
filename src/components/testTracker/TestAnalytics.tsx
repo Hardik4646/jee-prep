@@ -1,7 +1,7 @@
 import { useState, useMemo, memo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceDot, Label } from 'recharts';
 import type { TooltipContentProps, ValueType, NameType } from 'recharts';
-import { ClipboardList, TrendingUp, Award, Target, BarChart3, AlertTriangle, Calculator, X, Sparkles } from 'lucide-react';
+import { ClipboardList, TrendingUp, Award, Target, BarChart3, AlertTriangle, Calculator, X, Sparkles, Lightbulb } from 'lucide-react';
 import { ExamTemplate, TestAttempt, SubjectScore } from '../../types';
 import { format, parseISO } from 'date-fns';
 
@@ -339,7 +339,7 @@ function AttemptDetailPopover({ attempt, onClose }: AttemptDetailProps) {
 
 /* ---------- Main component ---------- */
 
-type ChartMode = 'total' | 'subject' | 'paper' | 'accuracy' | 'negative';
+type ChartMode = 'total' | 'subject' | 'paper' | 'accuracy' | 'negative' | 'attemptRate' | 'efficiency';
 
 export function TestAnalytics({ attempts, templates }: { attempts: TestAttempt[]; templates: ExamTemplate[] }) {
   const [filterTemplate, setFilterTemplate] = useState('all');
@@ -376,7 +376,11 @@ export function TestAnalytics({ attempts, templates }: { attempts: TestAttempt[]
     percentage: a.percentage,
     accuracy: a.accuracy,
     negative: a.marksLostToNegative,
+    attemptRate: a.totalQuestions > 0 ? ((a.totalCorrect + a.totalIncorrect) / a.totalQuestions) * 100 : 0,
+    marksPerMinute: a.timeTakenMinutes ? a.totalScore / a.timeTakenMinutes : null,
   })), [filtered]);
+
+  const hasTimingData = useMemo(() => filtered.some(a => !!a.timeTakenMinutes), [filtered]);
 
   const subjectTrend = useMemo(() => {
     const subjectNames = new Set<string>();
@@ -468,6 +472,51 @@ export function TestAnalytics({ attempts, templates }: { attempts: TestAttempt[]
     return { direction, slope: overallSlope, gap, totalNegLost, negPctOfMax, targetRate, lastDelta, last, n };
   }, [filtered, insights]);
 
+  // Concrete, checkable tips — distinct from the Coach's Notes prose above.
+  // Each one is derived from an actual pattern in the data, not generic advice.
+  const tips = useMemo(() => {
+    if (!narrative || !insights || filtered.length < 2) return [];
+    const list: { text: string; tone: 'success' | 'warning' | 'danger' | 'info' }[] = [];
+
+    const avgAttemptRate = trendData.reduce((s, d) => s + d.attemptRate, 0) / trendData.length;
+    const avgAccuracy = stats.avgAcc;
+
+    if (avgAttemptRate > 85 && avgAccuracy < 60) {
+      list.push({ text: `You attempt ${avgAttemptRate.toFixed(0)}% of questions on average but only get ${avgAccuracy.toFixed(0)}% right. Try deliberately skipping your least-confident questions instead of guessing across the board — it likely costs less than the negative marking.`, tone: 'warning' });
+    } else if (avgAttemptRate < 65 && avgAccuracy > 80) {
+      list.push({ text: `You're ${avgAccuracy.toFixed(0)}% accurate on what you attempt, but only attempting ${avgAttemptRate.toFixed(0)}% of the paper. You can likely afford a few more calculated attempts on medium-confidence questions.`, tone: 'info' });
+    }
+
+    if (narrative.negPctOfMax > 5) {
+      list.push({ text: `Negative marking has cost more than 5% of total possible marks across these attempts. Try a personal rule — e.g. only attempt if you can eliminate at least 2 options — and see if it moves this number.`, tone: 'danger' });
+    }
+
+    const overallVariance = (() => {
+      const pcts = filtered.map(a => a.percentage);
+      const m = pcts.reduce((s, v) => s + v, 0) / pcts.length;
+      return Math.sqrt(pcts.reduce((s, v) => s + (v - m) ** 2, 0) / pcts.length);
+    })();
+    if (overallVariance > 12) {
+      list.push({ text: `Your overall score swings by about ±${overallVariance.toFixed(0)} points between tests — a range that large usually means consistency (sleep, nerves, timing on exam day) is costing you as much as any knowledge gap right now.`, tone: 'warning' });
+    }
+
+    if (hasTimingData) {
+      const timed = trendData.filter(d => d.marksPerMinute !== null);
+      if (timed.length >= 2) {
+        const lastEff = timed[timed.length - 1].marksPerMinute as number;
+        const priorAvg = timed.slice(0, -1).reduce((s, d) => s + (d.marksPerMinute as number), 0) / (timed.length - 1);
+        if (priorAvg > 0 && lastEff < priorAvg * 0.75) {
+          list.push({ text: `Marks-per-minute on your most recent timed test dropped well below your average — worth checking whether you ran out of time rather than lacking knowledge.`, tone: 'warning' });
+        }
+      }
+    }
+
+    if (list.length === 0) {
+      list.push({ text: `No red flags in your attempt pattern right now — keep logging tests to build a longer trend for sharper tips.`, tone: 'success' });
+    }
+    return list;
+  }, [narrative, insights, filtered, trendData, stats, hasTimingData]);
+
   const kpis: { label: string; value: string | number; sub?: string; subColor?: string; color: string; bg: string; icon: typeof ClipboardList }[] = [
     { label: 'Tests Taken', value: stats.total, sub: filtered.length > 0 ? `Latest: ${format(parseISO(filtered[filtered.length - 1].date), 'MMM d')}` : undefined, subColor: undefined, color: 'var(--accent)', bg: 'var(--accent-muted-bg)', icon: ClipboardList },
     { label: 'Avg Percentage', value: `${stats.avgPct.toFixed(1)}%`, sub: narrative ? `${narrative.lastDelta >= 0 ? '▲' : '▼'} ${Math.abs(narrative.lastDelta).toFixed(1)} pts vs last test` : undefined, subColor: narrative ? (narrative.lastDelta >= 0 ? 'var(--success)' : 'var(--danger)') : undefined, color: 'var(--info)', bg: 'var(--info-bg)', icon: TrendingUp },
@@ -480,7 +529,9 @@ export function TestAnalytics({ attempts, templates }: { attempts: TestAttempt[]
     { id: 'subject', label: 'Subject Accuracy' },
     { id: 'paper', label: 'Paper-wise' },
     { id: 'accuracy', label: 'Accuracy' },
+    { id: 'attemptRate', label: 'Attempt Rate' },
     { id: 'negative', label: 'Neg. Loss' },
+    { id: 'efficiency', label: 'Time Efficiency' },
   ];
 
   // Resolve the attempt for the popover. For 'paper' mode the data is filtered to dual-only,
@@ -490,6 +541,10 @@ export function TestAnalytics({ attempts, templates }: { attempts: TestAttempt[]
     if (chartMode === 'paper' && paperTrend) {
       const dual = filtered.filter(a => a.pattern === 'dual');
       return dual[selectedAttemptIdx] ?? null;
+    }
+    if (chartMode === 'efficiency') {
+      const timed = filtered.filter(a => !!a.timeTakenMinutes);
+      return timed[selectedAttemptIdx] ?? null;
     }
     return filtered[selectedAttemptIdx] ?? null;
   }, [selectedAttemptIdx, chartMode, paperTrend, filtered]);
@@ -531,9 +586,12 @@ export function TestAnalytics({ attempts, templates }: { attempts: TestAttempt[]
         <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
           <p className="card-title">Performance Trend</p>
           <div className="flex gap-1 flex-wrap" style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-button)', padding: 3 }}>
-            {chartModes.map(m => (
-              <button key={m.id} onClick={() => setChartMode(m.id)} disabled={m.id === 'paper' && !paperTrend} style={{ padding: '6px 10px', borderRadius: 'var(--radius-button)', fontSize: 11, fontWeight: 600, cursor: m.id === 'paper' && !paperTrend ? 'default' : 'pointer', border: 'none', background: chartMode === m.id ? 'var(--accent)' : 'transparent', color: chartMode === m.id ? '#fff' : 'var(--text-tertiary)', opacity: m.id === 'paper' && !paperTrend ? 0.3 : 1 }}>{m.label}</button>
-            ))}
+            {chartModes.map(m => {
+              const disabled = (m.id === 'paper' && !paperTrend) || (m.id === 'efficiency' && !hasTimingData);
+              return (
+                <button key={m.id} onClick={() => setChartMode(m.id)} disabled={disabled} style={{ padding: '6px 10px', borderRadius: 'var(--radius-button)', fontSize: 11, fontWeight: 600, cursor: disabled ? 'default' : 'pointer', border: 'none', background: chartMode === m.id ? 'var(--accent)' : 'transparent', color: chartMode === m.id ? '#fff' : 'var(--text-tertiary)', opacity: disabled ? 0.3 : 1 }}>{m.label}</button>
+              );
+            })}
           </div>
         </div>
         {filtered.length > 0 ? (
@@ -597,6 +655,41 @@ export function TestAnalytics({ attempts, templates }: { attempts: TestAttempt[]
                 onClickPoint={(i) => setSelectedAttemptIdx(i)}
               />
             )}
+            {chartMode === 'attemptRate' && (
+              <>
+                <TrendChart
+                  data={trendData}
+                  lines={[{ key: 'attemptRate', name: 'Attempt Rate %', color: '#FB923C' }]}
+                  yAxisLabel="% of paper attempted"
+                  attempts={filtered}
+                  percentageKeys={['attemptRate']}
+                  highlightMax
+                  highlightLast
+                  onClickPoint={(i) => setSelectedAttemptIdx(i)}
+                />
+                <p style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 10, lineHeight: 1.5 }}>
+                  What share of the paper you're attempting (correct + wrong, ignoring unattempted) per test. A rising trend paired with
+                  falling accuracy usually means you're guessing more; a low, flat rate may mean you're leaving easy marks unattempted.
+                </p>
+              </>
+            )}
+            {chartMode === 'efficiency' && hasTimingData && (
+              <>
+                <TrendChart
+                  data={trendData.filter(d => d.marksPerMinute !== null)}
+                  lines={[{ key: 'marksPerMinute', name: 'Marks / Minute', color: '#38BDF8' }]}
+                  yAxisLabel="Marks per minute"
+                  attempts={filtered.filter(a => !!a.timeTakenMinutes)}
+                  highlightMax
+                  highlightLast
+                  onClickPoint={(i) => setSelectedAttemptIdx(i)}
+                />
+                <p style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 10, lineHeight: 1.5 }}>
+                  Score earned per minute spent — only shown for attempts where you logged time taken. Useful for spotting whether a low
+                  score came from lack of knowledge or from running out of time.
+                </p>
+              </>
+            )}
           </>
         ) : (
           <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><p style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>No data for selected filters</p></div>
@@ -650,6 +743,32 @@ export function TestAnalytics({ attempts, templates }: { attempts: TestAttempt[]
                 </strong>{narrative.targetRate < 50 ? ' — worth revisiting whether the target is realistic yet, or where marks are consistently slipping.' : '. Keep this up.'}
               </p>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Tips — concrete, checkable actions derived from attempt-rate, negative marking,
+          consistency, and timing patterns. Separate from the prose above on purpose:
+          this is meant to be scanned, not read. */}
+      {tips.length > 0 && (
+        <div className="card" style={{ padding: 24 }}>
+          <div className="flex items-center gap-2" style={{ marginBottom: 14 }}>
+            <div className="w-8 h-8 rounded-[10px] flex items-center justify-center flex-shrink-0"
+              style={{ background: 'var(--warning-bg)', border: '1px solid rgba(245,166,35,0.2)' }}>
+              <Lightbulb size={15} style={{ color: 'var(--warning)' }} />
+            </div>
+            <p className="card-title">Tips For Your Next Attempt</p>
+          </div>
+          <div className="space-y-2.5">
+            {tips.map((tip, i) => {
+              const toneColor = { success: 'var(--success)', warning: 'var(--warning)', danger: 'var(--danger)', info: 'var(--info)' }[tip.tone];
+              return (
+                <div key={i} className="flex items-start gap-3" style={{ padding: '12px 14px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-card)', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: toneColor, marginTop: 6, flexShrink: 0 }} />
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{tip.text}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
