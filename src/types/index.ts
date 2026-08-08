@@ -73,7 +73,32 @@ export interface DailyFact {
   subject: Subject;
 }
 
-export type View = 'dashboard' | 'ledger' | 'tests' | 'analytics' | 'notes' | 'assignments' | 'strategy';
+export type View = 'dashboard' | 'ledger' | 'tests' | 'analytics' | 'notes' | 'assignments' | 'strategy' | 'syllabus';
+
+// ─── Syllabus Tracker Types ───────────────────────────────────────
+export type ChapterClass = '11' | '12';
+export type Weightage = 'High' | 'Medium' | 'Low';
+
+export interface SyllabusChapter {
+  id: string;
+  name: string;
+  subject: Subject;
+  classLevel: ChapterClass;
+  weightage: Weightage;
+  lectureDone: boolean;
+  notesDone: boolean;
+  moduleDone: boolean;
+  supplementDone: boolean;
+  isCustom?: boolean;
+}
+
+export interface SupplementBook {
+  subject: Subject;
+  title: string;
+  author: string;
+  essential: boolean;
+  howTo: string[];
+}
 
 // ─── Test Tracker Types ───────────────────────────────────────────
 
