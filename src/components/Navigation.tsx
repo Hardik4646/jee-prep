@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LayoutDashboard, FileText, BarChart3, BookOpen, ClipboardCheck, Zap, Settings, ChevronRight, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, FileText, BarChart3, BookOpen, ClipboardCheck, Zap, Settings, ChevronRight, ClipboardList, GraduationCap } from 'lucide-react';
 import { View } from '../types';
 
 interface NavProps {
@@ -12,13 +12,14 @@ const NAV = [
   { id: 'dashboard' as View, label: 'Dashboard', icon: LayoutDashboard },
   { id: 'ledger' as View, label: 'Ledger', icon: FileText },
   { id: 'tests' as View, label: 'Tests', icon: ClipboardList },
+  { id: 'syllabus' as View, label: 'Syllabus', icon: GraduationCap },
   { id: 'analytics' as View, label: 'Analytics', icon: BarChart3 },
   { id: 'strategy' as View, label: 'Strategy', icon: Zap },
   { id: 'notes' as View, label: 'Notes', icon: BookOpen },
   { id: 'assignments' as View, label: 'Assignments', icon: ClipboardCheck },
 ];
 
-const MOBILE_NAV = NAV.filter(n => n.id !== 'strategy' && n.id !== 'notes');
+const MOBILE_NAV = NAV.filter(n => n.id !== 'strategy' && n.id !== 'notes' && n.id !== 'syllabus');
 
 export function Sidebar({ currentView, setCurrentView, onSettingsClick }: NavProps) {
   const [expanded, setExpanded] = useState(false);

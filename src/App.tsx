@@ -1,8 +1,9 @@
 import { useState, useCallback, Suspense, lazy } from 'react';
 import { Sidebar, BottomNav } from './components/Navigation';
 import { useLocalStorage } from './hooks/useLocalStorage';
-import { Mistake, ImportantNote, InorganicAssignment, GamificationState, View, ExamTemplate, TestAttempt } from './types';
+import { Mistake, ImportantNote, InorganicAssignment, GamificationState, View, ExamTemplate, TestAttempt, SyllabusChapter } from './types';
 import { dummyMistakes, dummyNotes, dummyAssignments } from './data/dummyData';
+import { SEED_SYLLABUS } from './data/syllabus';
 import { getLevelFromXP } from './data/gamification';
 import { X, Settings } from 'lucide-react';
 import { format } from 'date-fns';
@@ -14,6 +15,7 @@ const JEEExamStrategy = lazy(() => import('./components/JEEExamStrategy').then(m
 const ImportantNotes = lazy(() => import('./components/ImportantNotes').then(m => ({ default: m.ImportantNotes })));
 const AssignmentsTracker = lazy(() => import('./components/AssignmentsTracker').then(m => ({ default: m.AssignmentsTracker })));
 const TestTracker = lazy(() => import('./components/TestTracker').then(m => ({ default: m.TestTracker })));
+const SyllabusTracker = lazy(() => import('./components/SyllabusTracker').then(m => ({ default: m.SyllabusTracker })));
 const AppSettings = lazy(() => import('./components/AppSettings').then(m => ({ default: m.AppSettings })));
 
 const DEFAULT_GAMIFICATION: GamificationState = {
@@ -39,6 +41,7 @@ export default function App() {
   const [assignments, setAssignments] = useLocalStorage<InorganicAssignment[]>('jee-assignments-v4', dummyAssignments);
   const [testTemplates, setTestTemplates] = useLocalStorage<ExamTemplate[]>('jee-test-templates-v4', []);
   const [testAttempts, setTestAttempts] = useLocalStorage<TestAttempt[]>('jee-test-attempts-v4', []);
+  const [syllabus, setSyllabus] = useLocalStorage<SyllabusChapter[]>('jee-syllabus-v1', SEED_SYLLABUS);
   const [gamification, setGamification] = useLocalStorage<GamificationState>('jee-gamification-v4', DEFAULT_GAMIFICATION);
 
   const handleXP = useCallback((amount: number) => {
@@ -60,8 +63,9 @@ export default function App() {
     localStorage.setItem('jee-assignments-v4', JSON.stringify([]));
     localStorage.setItem('jee-test-templates-v4', JSON.stringify([]));
     localStorage.setItem('jee-test-attempts-v4', JSON.stringify([]));
+    localStorage.setItem('jee-syllabus-v1', JSON.stringify(SEED_SYLLABUS));
     localStorage.setItem('jee-gamification-v4', JSON.stringify(DEFAULT_GAMIFICATION));
-    setMistakes([]); setNotes([]); setAssignments([]); setTestTemplates([]); setTestAttempts([]); setGamification(DEFAULT_GAMIFICATION);
+    setMistakes([]); setNotes([]); setAssignments([]); setTestTemplates([]); setTestAttempts([]); setSyllabus(SEED_SYLLABUS.map(c => ({ ...c }))); setGamification(DEFAULT_GAMIFICATION);
   };
 
   const handleImport = (data: { mistakes: Mistake[]; notes: ImportantNote[]; assignments: InorganicAssignment[] }) => {
@@ -76,6 +80,7 @@ export default function App() {
   const safeA = Array.isArray(assignments) ? assignments : [];
   const safeT = Array.isArray(testTemplates) ? testTemplates : [];
   const safeTA = Array.isArray(testAttempts) ? testAttempts : [];
+  const safeSyl = Array.isArray(syllabus) && syllabus.length > 0 ? syllabus : SEED_SYLLABUS;
   const safeG = (gamification as GamificationState) ?? DEFAULT_GAMIFICATION;
 
   return (
@@ -92,6 +97,7 @@ export default function App() {
             {currentView === 'strategy'    && <JEEExamStrategy mistakes={safeM} setMistakes={setMistakes} />}
             {currentView === 'notes'       && <ImportantNotes notes={safeN} setNotes={setNotes} />}
             {currentView === 'assignments' && <AssignmentsTracker assignments={safeA} setAssignments={setAssignments} />}
+            {currentView === 'syllabus'    && <SyllabusTracker chapters={safeSyl} setChapters={setSyllabus} onXP={handleXP} />}
           </Suspense>
         </div>
       </main>
