@@ -1,8 +1,10 @@
 import { useState, useMemo } from 'react';
-import { X, ChevronDown, CheckCircle2, Clock, Trash2, ClipboardList, Pencil } from 'lucide-react';
+import { X, ChevronDown, ChevronUp, ChevronsUpDown, CheckCircle2, Clock, Trash2, ClipboardList, Pencil } from 'lucide-react';
 import { ExamTemplate, TestAttempt } from '../../types';
 import { TEST_TYPES } from './helpers';
 import { format, parseISO } from 'date-fns';
+
+type SortField = 'date' | 'score' | 'percentage' | 'accuracy';
 
 export function TestHistory({ attempts, templates, onDelete, onEdit }: {
   attempts: TestAttempt[]; templates: ExamTemplate[];
@@ -16,17 +18,33 @@ export function TestHistory({ attempts, templates, onDelete, onEdit }: {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [sortField, setSortField] = useState<SortField>('date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortField(field); setSortDir('desc'); }
+  };
 
   const filtered = useMemo(() => {
-    return attempts
+    const list = attempts
       .filter(a => filterTemplate === 'all' || a.templateId === filterTemplate)
       .filter(a => filterType === 'all' || a.testType === filterType)
       .filter(a => filterPattern === 'all' || a.pattern === filterPattern)
       .filter(a => !dateFrom || a.date >= dateFrom)
       .filter(a => !dateTo || a.date <= dateTo)
-      .filter(a => !search || a.attemptName.toLowerCase().includes(search.toLowerCase()) || a.templateName.toLowerCase().includes(search.toLowerCase()))
-      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
-  }, [attempts, filterTemplate, filterType, filterPattern, dateFrom, dateTo, search]);
+      .filter(a => !search || a.attemptName.toLowerCase().includes(search.toLowerCase()) || a.templateName.toLowerCase().includes(search.toLowerCase()));
+    const dir = sortDir === 'asc' ? 1 : -1;
+    const sorted = [...list].sort((a, b) => {
+      switch (sortField) {
+        case 'score': return (a.totalScore - b.totalScore) * dir;
+        case 'percentage': return (a.percentage - b.percentage) * dir;
+        case 'accuracy': return (a.accuracy - b.accuracy) * dir;
+        default: return (a.date.localeCompare(b.date) || a.createdAt - b.createdAt) * dir;
+      }
+    });
+    return sorted;
+  }, [attempts, filterTemplate, filterType, filterPattern, dateFrom, dateTo, search, sortField, sortDir]);
 
   const hasFilters = filterTemplate !== 'all' || filterType !== 'all' || filterPattern !== 'all' || dateFrom || dateTo || search;
   const clearFilters = () => { setFilterTemplate('all'); setFilterType('all'); setFilterPattern('all'); setDateFrom(''); setDateTo(''); setSearch(''); };
@@ -70,8 +88,23 @@ export function TestHistory({ attempts, templates, onDelete, onEdit }: {
         <table className="w-full" style={{ minWidth: 600 }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-              {['Test', 'Template', 'Date', 'Score', '%', 'Accuracy', 'Pattern', ''].map((h, i) => (
-                <th key={i} className={i === 1 || i === 5 ? 'hidden md:table-cell' : i === 6 ? 'hidden lg:table-cell' : ''} style={{ padding: '14px 18px', textAlign: i >= 6 ? 'right' : 'left', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>{h}</th>
+              {([
+                { label: 'Test', field: null, hide: '' },
+                { label: 'Template', field: null, hide: 'hidden md:table-cell' },
+                { label: 'Date', field: 'date' as SortField, hide: '' },
+                { label: 'Score', field: 'score' as SortField, hide: '' },
+                { label: '%', field: 'percentage' as SortField, hide: '' },
+                { label: 'Accuracy', field: 'accuracy' as SortField, hide: 'hidden md:table-cell' },
+                { label: 'Pattern', field: null, hide: 'hidden lg:table-cell' },
+                { label: '', field: null, hide: '' },
+              ]).map((h, i) => (
+                <th key={i} className={h.hide} onClick={h.field ? () => toggleSort(h.field as SortField) : undefined}
+                  style={{ padding: '14px 18px', textAlign: i >= 6 ? 'right' : 'left', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: sortField === h.field ? 'var(--accent)' : 'var(--text-tertiary)', cursor: h.field ? 'pointer' : 'default', userSelect: 'none', whiteSpace: 'nowrap' }}>
+                  <span className="inline-flex items-center gap-1">
+                    {h.label}
+                    {h.field && (sortField === h.field ? (sortDir === 'asc' ? <ChevronUp size={11} /> : <ChevronDown size={11} />) : <ChevronsUpDown size={11} style={{ opacity: 0.4 }} />)}
+                  </span>
+                </th>
               ))}
             </tr>
           </thead>
@@ -92,7 +125,10 @@ export function TestHistory({ attempts, templates, onDelete, onEdit }: {
 function RowBlock({ a, idx, isOpen, onToggle, onDelete, onEdit }: { a: TestAttempt; idx: number; isOpen: boolean; onToggle: () => void; onDelete: (id: string) => void; onEdit: (attempt: TestAttempt) => void }) {
   return (
     <>
-      <tr onClick={onToggle} style={{ borderBottom: '1px solid var(--border-subtle)', background: isOpen ? 'var(--accent-muted-bg)' : idx % 2 ? 'var(--bg-elevated)' : 'transparent', cursor: 'pointer' }}>
+      <tr onClick={onToggle}
+        onMouseEnter={e => { if (!isOpen) e.currentTarget.style.background = 'var(--bg-elevated)'; }}
+        onMouseLeave={e => { if (!isOpen) e.currentTarget.style.background = idx % 2 ? 'var(--bg-elevated)' : 'transparent'; }}
+        style={{ borderBottom: '1px solid var(--border-subtle)', background: isOpen ? 'var(--accent-muted-bg)' : idx % 2 ? 'var(--bg-elevated)' : 'transparent', cursor: 'pointer', transition: 'background 120ms' }}>
         <td style={{ padding: '14px 18px' }}>
           <div className="flex items-center gap-2">
             {a.targetAchieved && <CheckCircle2 size={14} style={{ color: 'var(--success)', flexShrink: 0 }} />}
