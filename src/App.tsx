@@ -68,11 +68,17 @@ export default function App() {
     setMistakes([]); setNotes([]); setAssignments([]); setTestTemplates([]); setTestAttempts([]); setSyllabus(SEED_SYLLABUS.map(c => ({ ...c }))); setGamification(DEFAULT_GAMIFICATION);
   };
 
-  const handleImport = (data: { mistakes: Mistake[]; notes: ImportantNote[]; assignments: InorganicAssignment[] }) => {
+  const handleImport = (data: { mistakes: Mistake[]; notes: ImportantNote[]; assignments: InorganicAssignment[]; testTemplates: ExamTemplate[]; testAttempts: TestAttempt[]; syllabus: SyllabusChapter[] }) => {
     localStorage.setItem('jee-mistakes-v4', JSON.stringify(data.mistakes));
     localStorage.setItem('jee-notes-v4', JSON.stringify(data.notes));
     localStorage.setItem('jee-assignments-v4', JSON.stringify(data.assignments));
+    if (data.testTemplates.length > 0) localStorage.setItem('jee-test-templates-v4', JSON.stringify(data.testTemplates));
+    if (data.testAttempts.length > 0) localStorage.setItem('jee-test-attempts-v4', JSON.stringify(data.testAttempts));
+    if (data.syllabus.length > 0) localStorage.setItem('jee-syllabus-v1', JSON.stringify(data.syllabus));
     setMistakes(data.mistakes); setNotes(data.notes); setAssignments(data.assignments);
+    if (data.testTemplates.length > 0) setTestTemplates(data.testTemplates);
+    if (data.testAttempts.length > 0) setTestAttempts(data.testAttempts);
+    if (data.syllabus.length > 0) setSyllabus(data.syllabus);
   };
 
   const safeM = Array.isArray(mistakes) ? mistakes : [];
@@ -122,7 +128,7 @@ export default function App() {
               </button>
             </div>
             <Suspense fallback={<RouteLoader />}>
-              <AppSettings mistakes={safeM} notes={safeN} assignments={safeA} onReset={handleResetAll} onImport={handleImport} onClose={() => setShowSettings(false)} />
+              <AppSettings mistakes={safeM} notes={safeN} assignments={safeA} testTemplates={safeT} testAttempts={safeTA} syllabus={safeSyl} onReset={handleResetAll} onImport={handleImport} onClose={() => setShowSettings(false)} />
             </Suspense>
           </div>
         </div>

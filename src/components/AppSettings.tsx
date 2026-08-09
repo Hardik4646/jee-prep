@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { Download, Upload, Trash2, AlertTriangle, CheckCircle, Database, Shield } from 'lucide-react';
-import { Mistake, ImportantNote, InorganicAssignment, Subject, ErrorCategory, Priority, MistakeStatus, AssignmentType } from '../types';
+import { Mistake, ImportantNote, InorganicAssignment, Subject, ErrorCategory, Priority, MistakeStatus, AssignmentType, ExamTemplate, TestAttempt, SyllabusChapter, ChapterClass, Weightage } from '../types';
 
 interface AppSettingsProps {
   mistakes: Mistake[];
   notes: ImportantNote[];
   assignments: InorganicAssignment[];
+  testTemplates: ExamTemplate[];
+  testAttempts: TestAttempt[];
+  syllabus: SyllabusChapter[];
   onReset: () => void;
-  onImport: (data: { mistakes: Mistake[]; notes: ImportantNote[]; assignments: InorganicAssignment[] }) => void;
+  onImport: (data: { mistakes: Mistake[]; notes: ImportantNote[]; assignments: InorganicAssignment[]; testTemplates: ExamTemplate[]; testAttempts: TestAttempt[]; syllabus: SyllabusChapter[] }) => void;
   onClose: () => void;
 }
 
@@ -16,6 +19,8 @@ const VALID_CATEGORIES: ErrorCategory[] = ['Calculation', 'Conceptual Gap', 'For
 const VALID_PRIORITIES: Priority[] = ['High', 'Medium', 'Low'];
 const VALID_STATUSES: MistakeStatus[] = ['Active', 'Mastered'];
 const VALID_ASSIGNMENT_TYPES: AssignmentType[] = ['CSC', 'TFT', 'Other'];
+const VALID_CLASS_LEVELS: ChapterClass[] = ['11', '12'];
+const VALID_WEIGHTAGE: Weightage[] = ['High', 'Medium', 'Low'];
 
 function sanitizeMistake(x: unknown): Mistake | null {
   if (!x || typeof x !== 'object') return null;
@@ -69,13 +74,53 @@ function sanitizeAssignment(x: unknown): InorganicAssignment | null {
   };
 }
 
-export function AppSettings({ mistakes, notes, assignments, onReset, onImport, onClose }: AppSettingsProps) {
+// Lighter-touch validation for the nested Test Tracker / Syllabus shapes — these are
+// deeply nested objects (papers[].subjects[], etc). We check the required identifying
+// fields and structural shape (arrays where arrays are expected) rather than validating
+// every numeric field individually, since a malformed nested number just renders as 0/NaN
+// downstream rather than crashing the app the way a missing top-level field would.
+function sanitizeTemplate(x: unknown): ExamTemplate | null {
+  if (!x || typeof x !== 'object') return null;
+  const o = x as Record<string, unknown>;
+  if (typeof o.id !== 'string' || !o.id) return null;
+  if (typeof o.name !== 'string' || !o.name) return null;
+  if (o.pattern !== 'single' && o.pattern !== 'dual') return null;
+  if (!Array.isArray(o.papers)) return null;
+  return o as unknown as ExamTemplate;
+}
+
+function sanitizeAttempt(x: unknown): TestAttempt | null {
+  if (!x || typeof x !== 'object') return null;
+  const o = x as Record<string, unknown>;
+  if (typeof o.id !== 'string' || !o.id) return null;
+  if (typeof o.templateId !== 'string' || !o.templateId) return null;
+  if (!Array.isArray(o.papers)) return null;
+  if (typeof o.date !== 'string' || !o.date) return null;
+  return o as unknown as TestAttempt;
+}
+
+function sanitizeChapter(x: unknown): SyllabusChapter | null {
+  if (!x || typeof x !== 'object') return null;
+  const o = x as Record<string, unknown>;
+  if (typeof o.id !== 'string' || !o.id) return null;
+  if (typeof o.name !== 'string' || !o.name) return null;
+  if (!VALID_SUBJECTS.includes(o.subject as Subject)) return null;
+  if (!VALID_CLASS_LEVELS.includes(o.classLevel as ChapterClass)) return null;
+  if (!VALID_WEIGHTAGE.includes(o.weightage as Weightage)) return null;
+  return {
+    id: o.id, name: o.name, subject: o.subject as Subject, classLevel: o.classLevel as ChapterClass, weightage: o.weightage as Weightage,
+    lectureDone: !!o.lectureDone, notesDone: !!o.notesDone, moduleDone: !!o.moduleDone, supplementDone: !!o.supplementDone,
+    ...(typeof o.isCustom === 'boolean' ? { isCustom: o.isCustom } : {}),
+  };
+}
+
+export function AppSettings({ mistakes, notes, assignments, testTemplates, testAttempts, syllabus, onReset, onImport, onClose }: AppSettingsProps) {
   const [resetStep, setResetStep] = useState<0 | 1 | 2>(0);
   const [importStatus, setImportStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [importMsg, setImportMsg] = useState('');
 
   const handleExport = () => {
-    const payload = { version: '4.0', exportDate: new Date().toISOString(), mistakes, notes, assignments };
+    const payload = { version: '5.0', exportDate: new Date().toISOString(), mistakes, notes, assignments, testTemplates, testAttempts, syllabus };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -93,12 +138,15 @@ export function AppSettings({ mistakes, notes, assignments, onReset, onImport, o
         const m = (Array.isArray(raw.mistakes) ? raw.mistakes : []).map((x: unknown) => sanitizeMistake(x)).filter((x: Mistake | null): x is Mistake => x !== null);
         const n = (Array.isArray(raw.notes) ? raw.notes : []).map((x: unknown) => sanitizeNote(x)).filter((x: ImportantNote | null): x is ImportantNote => x !== null);
         const a = (Array.isArray(raw.assignments) ? raw.assignments : []).map((x: unknown) => sanitizeAssignment(x)).filter((x: InorganicAssignment | null): x is InorganicAssignment => x !== null);
-        const total = m.length + n.length + a.length;
+        const tt = (Array.isArray(raw.testTemplates) ? raw.testTemplates : []).map((x: unknown) => sanitizeTemplate(x)).filter((x: ExamTemplate | null): x is ExamTemplate => x !== null);
+        const ta = (Array.isArray(raw.testAttempts) ? raw.testAttempts : []).map((x: unknown) => sanitizeAttempt(x)).filter((x: TestAttempt | null): x is TestAttempt => x !== null);
+        const sy = (Array.isArray(raw.syllabus) ? raw.syllabus : []).map((x: unknown) => sanitizeChapter(x)).filter((x: SyllabusChapter | null): x is SyllabusChapter => x !== null);
+        const total = m.length + n.length + a.length + tt.length + ta.length + sy.length;
         if (total === 0) throw new Error('No valid records found in file');
-        onImport({ mistakes: m, notes: n, assignments: a });
+        onImport({ mistakes: m, notes: n, assignments: a, testTemplates: tt, testAttempts: ta, syllabus: sy });
         setImportStatus('success');
-        setImportMsg(`Restored ${m.length} mistakes · ${n.length} notes · ${a.length} assignments`);
-        setTimeout(() => setImportStatus('idle'), 6000);
+        setImportMsg(`Restored ${m.length} mistakes · ${n.length} notes · ${a.length} assignments · ${tt.length} test templates · ${ta.length} test attempts · ${sy.length} syllabus chapters`);
+        setTimeout(() => setImportStatus('idle'), 8000);
       } catch (err) {
         setImportStatus('error');
         setImportMsg(err instanceof Error ? err.message : 'Import failed.');
@@ -108,7 +156,7 @@ export function AppSettings({ mistakes, notes, assignments, onReset, onImport, o
     reader.readAsText(file); e.target.value = '';
   };
 
-  const total = mistakes.length + notes.length + assignments.length;
+  const total = mistakes.length + notes.length + assignments.length + testTemplates.length + testAttempts.length + syllabus.length;
 
   return (
     <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -125,13 +173,13 @@ export function AppSettings({ mistakes, notes, assignments, onReset, onImport, o
         </div>
         <div>
           <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 1 }}>Offline-First Storage</p>
-          <p style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{mistakes.length} mistakes · {notes.length} notes · {assignments.length} assignments</p>
+          <p style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{mistakes.length} mistakes · {notes.length} notes · {assignments.length} assignments · {testTemplates.length} templates · {testAttempts.length} tests · {syllabus.length} syllabus chapters</p>
         </div>
       </div>
 
       <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-card)', background: 'var(--accent-muted-bg)', border: '1px solid rgba(13,148,136,0.15)' }}>
-        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>EXPORT FORMAT v4.0</p>
-        <p style={{ fontSize: 10, color: 'var(--text-tertiary)', lineHeight: 1.6, fontFamily: 'monospace' }}>{'{ version, exportDate, mistakes[], notes[], assignments[] }'}</p>
+        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>EXPORT FORMAT v5.0</p>
+        <p style={{ fontSize: 10, color: 'var(--text-tertiary)', lineHeight: 1.6, fontFamily: 'monospace' }}>{'{ version, exportDate, mistakes[], notes[], assignments[], testTemplates[], testAttempts[], syllabus[] }'}</p>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
