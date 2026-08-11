@@ -253,25 +253,30 @@ function describeArc(cx: number, cy: number, r: number, startAngle: number, endA
 
 /** Segmented progress ring — 4 independently clickable arcs, one per stage.
  * The ring IS the control here, not a decoration next to a separate row of buttons. */
-function SegmentRing({ chapter, onToggle, size = 60 }: { chapter: SyllabusChapter; onToggle: (stage: StageKey) => void; size?: number }) {
-  const cx = size / 2, cy = size / 2, r = size / 2 - 7;
+function SegmentRing({ chapter, onToggle, size = 68 }: { chapter: SyllabusChapter; onToggle: (stage: StageKey) => void; size?: number }) {
+  const cx = size / 2, cy = size / 2;
+  const r = size / 2 - 13; // leaves room for the wide invisible hit-stroke without clipping at the SVG edge
   const gap = 10;
   const span = 90 - gap;
   const doneCount = STAGES.filter(s => chapter[s.key]).length;
   return (
     <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
-      <svg width={size} height={size}>
+      <svg width={size} height={size} style={{ overflow: 'visible' }}>
         {STAGES.map((s, i) => {
           const start = i * 90 + gap / 2;
           const end = start + span;
           const on = chapter[s.key];
+          const d = describeArc(cx, cy, r, start, end);
           return (
-            <path key={s.key} d={describeArc(cx, cy, r, start, end)} fill="none"
-              stroke={on ? STAGE_ON_COLOR[s.key] : 'var(--bg-surface)'} strokeWidth={7} strokeLinecap="round"
-              style={{ cursor: 'pointer', transition: 'stroke 200ms' }}
-              onClick={(e) => { e.stopPropagation(); onToggle(s.key); }}>
-              <title>{s.label}{on ? ' — done (click to undo)' : ' — click to mark done'}</title>
-            </path>
+            <g key={s.key} onClick={(e) => { e.stopPropagation(); onToggle(s.key); }} style={{ cursor: 'pointer' }}>
+              {/* Wide, invisible hit target — the visible arc is only ~8px, way too thin to reliably tap,
+                  especially on mobile, so the actual clickable band is much larger than what's drawn. */}
+              <path d={d} fill="none" stroke="transparent" strokeWidth={24} strokeLinecap="round" pointerEvents="stroke">
+                <title>{s.label}{on ? ' — done (tap to undo)' : ' — tap to mark done'}</title>
+              </path>
+              <path d={d} fill="none" stroke={on ? STAGE_ON_COLOR[s.key] : 'var(--bg-surface)'} strokeWidth={8} strokeLinecap="round"
+                pointerEvents="none" style={{ transition: 'stroke 200ms' }} />
+            </g>
           );
         })}
       </svg>
