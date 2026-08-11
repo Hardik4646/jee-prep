@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import {
   GraduationCap, Plus, Trash2, RotateCcw, Search, X, BookMarked,
   CheckCircle2, TrendingUp, AlertTriangle, Award, BarChart3, Lightbulb,
-  ChevronDown, PlayCircle, FileEdit, Zap, BookOpenCheck, ListChecks, CalendarClock,
+  ChevronDown, PlayCircle, FileEdit, Zap, BookOpenCheck, ListChecks, CalendarClock, Check,
 } from 'lucide-react';
 import { SyllabusChapter, Subject, ChapterClass, Weightage } from '../types';
 import { SUPPLEMENT_BOOKS, SEED_SYLLABUS } from '../data/syllabus';
@@ -236,57 +236,6 @@ export function SyllabusTracker({ chapters, setChapters, onXP }: Props) {
   );
 }
 
-const STAGE_ON_COLOR: Record<StageKey, string> = {
-  lectureDone: 'var(--info)', notesDone: 'var(--warning)', moduleDone: 'var(--accent)', supplementDone: 'var(--success)',
-};
-
-function polar(cx: number, cy: number, r: number, angleDeg: number) {
-  const rad = ((angleDeg - 90) * Math.PI) / 180;
-  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-}
-function describeArc(cx: number, cy: number, r: number, startAngle: number, endAngle: number) {
-  const start = polar(cx, cy, r, startAngle);
-  const end = polar(cx, cy, r, endAngle);
-  const largeArc = endAngle - startAngle <= 180 ? 0 : 1;
-  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y}`;
-}
-
-/** Segmented progress ring — 4 independently clickable arcs, one per stage.
- * The ring IS the control here, not a decoration next to a separate row of buttons. */
-function SegmentRing({ chapter, onToggle, size = 68 }: { chapter: SyllabusChapter; onToggle: (stage: StageKey) => void; size?: number }) {
-  const cx = size / 2, cy = size / 2;
-  const r = size / 2 - 13; // leaves room for the wide invisible hit-stroke without clipping at the SVG edge
-  const gap = 10;
-  const span = 90 - gap;
-  const doneCount = STAGES.filter(s => chapter[s.key]).length;
-  return (
-    <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
-      <svg width={size} height={size} style={{ overflow: 'visible' }}>
-        {STAGES.map((s, i) => {
-          const start = i * 90 + gap / 2;
-          const end = start + span;
-          const on = chapter[s.key];
-          const d = describeArc(cx, cy, r, start, end);
-          return (
-            <g key={s.key} onClick={(e) => { e.stopPropagation(); onToggle(s.key); }} style={{ cursor: 'pointer' }}>
-              {/* Wide, invisible hit target — the visible arc is only ~8px, way too thin to reliably tap,
-                  especially on mobile, so the actual clickable band is much larger than what's drawn. */}
-              <path d={d} fill="none" stroke="transparent" strokeWidth={24} strokeLinecap="round" pointerEvents="stroke">
-                <title>{s.label}{on ? ' — done (tap to undo)' : ' — tap to mark done'}</title>
-              </path>
-              <path d={d} fill="none" stroke={on ? STAGE_ON_COLOR[s.key] : 'var(--bg-surface)'} strokeWidth={8} strokeLinecap="round"
-                pointerEvents="none" style={{ transition: 'stroke 200ms' }} />
-            </g>
-          );
-        })}
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)' }}>{doneCount}<span style={{ fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 700 }}>/4</span></span>
-      </div>
-    </div>
-  );
-}
-
 function MiniRing({ pct, color, size = 34 }: { pct: number; color: string; size?: number }) {
   const r = (size - 5) / 2;
   const circ = 2 * Math.PI * r;
@@ -330,23 +279,6 @@ function ChaptersTab({ grouped, filtered, filterSubject, setFilterSubject, filte
         </select>
       </div>
 
-      {/* Ring legend — since the ring replaces labeled buttons, spell out what each color means once, up top */}
-      {filtered.length > 0 && (
-        <div className="card flex items-center gap-4 flex-wrap" style={{ padding: '10px 16px' }}>
-          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>Ring segments</span>
-          {STAGES.map(s => {
-            const Icon = s.icon;
-            return (
-              <div key={s.key} className="flex items-center gap-1.5">
-                <div style={{ width: 10, height: 10, borderRadius: 3, background: STAGE_ON_COLOR[s.key] }} />
-                <Icon size={11} style={{ color: 'var(--text-tertiary)' }} />
-                <span style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>{s.label}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
       {filtered.length > 0 && (
         <div className="card flex items-center gap-2 flex-wrap" style={{ padding: '10px 16px', background: 'var(--accent-muted-bg)', border: '1px solid rgba(13,148,136,0.15)' }}>
           <ListChecks size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
@@ -382,7 +314,7 @@ function ChaptersTab({ grouped, filtered, filterSubject, setFilterSubject, filte
                   <ChevronDown size={16} style={{ color: 'var(--text-tertiary)', transform: isCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 200ms', flexShrink: 0 }} />
                 </button>
                 {!isCollapsed && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" style={{ padding: 14 }}>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3" style={{ padding: 14 }}>
                     {subCh.map(c => <ChapterCard key={c.id} c={c} subjectColor={SUBJECT_COLORS[subject]} toggleStage={toggleStage} deleteChapter={deleteChapter} />)}
                   </div>
                 )}
@@ -395,31 +327,63 @@ function ChaptersTab({ grouped, filtered, filterSubject, setFilterSubject, filte
   );
 }
 
+/** A single checkbox row — full-width clickable, standard square-checkbox visual
+ * (Notion/Todoist/Linear pattern), one consistent accent color for "done" rather
+ * than a different color per item. This is deliberately plain on purpose. */
+function StageCheckbox({ label, Icon, checked, onClick }: { label: string; Icon: typeof PlayCircle; checked: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick}
+      className="flex items-center gap-2.5 w-full text-left"
+      style={{ padding: '7px 8px', borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', transition: 'background 120ms' }}
+      onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-surface)')}
+      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+      <span style={{
+        width: 18, height: 18, borderRadius: 5, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        border: checked ? 'none' : '1.5px solid var(--text-tertiary)', background: checked ? 'var(--accent)' : 'transparent',
+        transition: 'all 150ms',
+      }}>
+        {checked && <Check size={12} strokeWidth={3} style={{ color: '#fff' }} />}
+      </span>
+      <Icon size={13} style={{ color: checked ? 'var(--accent)' : 'var(--text-tertiary)', flexShrink: 0 }} />
+      <span style={{ fontSize: 12.5, fontWeight: checked ? 600 : 500, color: checked ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{label}</span>
+    </button>
+  );
+}
+
 function ChapterCard({ c, subjectColor, toggleStage, deleteChapter }: { c: SyllabusChapter; subjectColor: string; toggleStage: (id: string, stage: StageKey) => void; deleteChapter: (id: string) => void }) {
   const progress = chapterProgress(c);
   const isComplete = progress === 1;
+  const doneCount = STAGES.filter(s => c[s.key]).length;
   return (
     <div className="group relative" style={{
-      padding: '16px 16px 14px', borderRadius: 'var(--radius-card)', background: 'var(--bg-elevated)',
-      border: `1px solid ${isComplete ? 'rgba(34,197,94,0.3)' : 'var(--border-subtle)'}`, transition: 'border-color 150ms, transform 150ms',
-    }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = isComplete ? 'rgba(34,197,94,0.5)' : `${subjectColor}50`; }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = isComplete ? 'rgba(34,197,94,0.3)' : 'var(--border-subtle)'; }}>
+      padding: '16px', borderRadius: 'var(--radius-card)', background: 'var(--bg-elevated)',
+      borderLeft: `3px solid ${isComplete ? 'var(--success)' : subjectColor}`,
+      border: `1px solid ${isComplete ? 'rgba(34,197,94,0.3)' : 'var(--border-subtle)'}`,
+      borderLeftWidth: 3, borderLeftColor: isComplete ? 'var(--success)' : subjectColor,
+      transition: 'border-color 150ms',
+    }}>
       <button onClick={() => deleteChapter(c.id)} className="opacity-0 group-hover:opacity-100" title="Delete chapter"
-        style={{ position: 'absolute', top: 10, right: 10, padding: 4, borderRadius: 6, background: 'transparent', border: 'none', cursor: 'pointer', transition: 'opacity 150ms' }}>
+        style={{ position: 'absolute', top: 12, right: 12, padding: 4, borderRadius: 6, background: 'transparent', border: 'none', cursor: 'pointer', transition: 'opacity 150ms' }}>
         <Trash2 size={12} style={{ color: 'var(--danger)' }} />
       </button>
 
-      <div className="flex items-start gap-3">
-        <SegmentRing chapter={c} onToggle={(stage) => toggleStage(c.id, stage)} />
-        <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
-          <p style={{ fontSize: 13, fontWeight: 700, color: isComplete ? 'var(--text-secondary)' : 'var(--text-primary)', lineHeight: 1.35, textDecoration: isComplete ? 'line-through' : 'none', textDecorationColor: 'var(--border-subtle)' }}>{c.name}</p>
-          <div className="flex items-center gap-1.5 flex-wrap" style={{ marginTop: 6 }}>
-            <span className="badge" style={{ fontSize: 9.5, padding: '1px 6px', background: `${subjectColor}15`, color: subjectColor, borderColor: `${subjectColor}30` }}>{c.classLevel}th</span>
-            <span className="badge" style={{ fontSize: 9.5, padding: '1px 6px', background: `${WEIGHTAGE_COLORS[c.weightage]}15`, color: WEIGHTAGE_COLORS[c.weightage], borderColor: `${WEIGHTAGE_COLORS[c.weightage]}30` }}>{c.weightage}</span>
-            {isComplete && <CheckCircle2 size={13} style={{ color: 'var(--success)' }} />}
-          </div>
-        </div>
+      <div className="flex items-start justify-between gap-2" style={{ paddingRight: 20 }}>
+        <p style={{ fontSize: 13.5, fontWeight: 700, color: isComplete ? 'var(--text-secondary)' : 'var(--text-primary)', lineHeight: 1.35, textDecoration: isComplete ? 'line-through' : 'none', textDecorationColor: 'var(--border-subtle)' }}>{c.name}</p>
+      </div>
+      <div className="flex items-center gap-1.5 flex-wrap" style={{ marginTop: 6, marginBottom: 12 }}>
+        <span className="badge" style={{ fontSize: 9.5, padding: '1px 6px', background: `${subjectColor}15`, color: subjectColor, borderColor: `${subjectColor}30` }}>{c.classLevel}th</span>
+        <span className="badge" style={{ fontSize: 9.5, padding: '1px 6px', background: `${WEIGHTAGE_COLORS[c.weightage]}15`, color: WEIGHTAGE_COLORS[c.weightage], borderColor: `${WEIGHTAGE_COLORS[c.weightage]}30` }}>{c.weightage}</span>
+        <span style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginLeft: 'auto' }}>{doneCount}/4</span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-x-1 gap-y-0.5" style={{ marginBottom: 10 }}>
+        {STAGES.map(s => (
+          <StageCheckbox key={s.key} label={s.label} Icon={s.icon} checked={c[s.key]} onClick={() => toggleStage(c.id, s.key)} />
+        ))}
+      </div>
+
+      <div className="relative h-1 rounded-full overflow-hidden" style={{ background: 'var(--bg-surface)' }}>
+        <div className="absolute inset-y-0 left-0 rounded-full transition-all" style={{ width: `${progress * 100}%`, background: isComplete ? 'var(--success)' : 'var(--accent)' }} />
       </div>
     </div>
   );
