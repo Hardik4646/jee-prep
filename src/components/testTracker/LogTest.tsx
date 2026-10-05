@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { X, Plus, Save, ChevronDown, CheckCircle2, Target, AlertTriangle, Star } from 'lucide-react';
+import { X, Plus, Save, ChevronDown, CheckCircle2, Target, AlertTriangle, Star, Clock } from 'lucide-react';
 import { ExamTemplate, TestAttempt, TestSourceType, SubjectScore, PaperScore } from '../../types';
 import { genId, computeSubjectScore, computePaperScore, subjectMaxScore, TEST_TYPES } from './helpers';
 import { format } from 'date-fns';
@@ -33,6 +33,9 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
     editing ? editing.papers.map(p => p.subjects.map(s => ({ marksObtained: String(s.score), negativeMarks: '0', correct: String(s.correct), incorrect: String(s.incorrect), unattempted: String(s.unattempted) }))) : []
   );
   const [percentile, setPercentile] = useState(editing?.percentile ? String(editing.percentile) : '');
+  const [timePhysics, setTimePhysics] = useState(editing?.timePhysics ? String(editing.timePhysics) : '');
+  const [timeChemistry, setTimeChemistry] = useState(editing?.timeChemistry ? String(editing.timeChemistry) : '');
+  const [timeMaths, setTimeMaths] = useState(editing?.timeMaths ? String(editing.timeMaths) : '');
   const [targetScore, setTargetScore] = useState('');
   const [addToLedger, setAddToLedger] = useState(false);
   const [wrongQuestions, setWrongQuestions] = useState<{ chapter: string; errorCategory: string }[]>([]);
@@ -129,14 +132,25 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
 
   const target = parseFloat(targetScore) || 0;
   const achieved = target > 0 ? liveTotal >= target : (editing?.targetAchieved ?? false);
-  const canSave = !!template && attemptName.trim().length > 0 && liveMax > 0;
+
+  const tP = parseInt(timePhysics) || 0;
+  const tC = parseInt(timeChemistry) || 0;
+  const tM = parseInt(timeMaths) || 0;
+  const totalTime = tP + tC + tM;
+  const timeExceeds = totalTime > 180;
+  const hasTimeData = tP > 0 || tC > 0 || tM > 0;
+
+  const canSave = !!template && attemptName.trim().length > 0 && liveMax > 0 && !timeExceeds;
 
   const handleSave = () => {
     if (!template || !canSave) return;
     const attempt: TestAttempt = {
       id: editing?.id ?? genId(), templateId: template.id, templateName: template.name, pattern: template.pattern,
       testType, attemptName: attemptName.trim(), date,
-      timeTakenMinutes: timeTaken ? parseInt(timeTaken) : undefined,
+      timeTakenMinutes: timeTaken ? parseInt(timeTaken) : (hasTimeData ? totalTime : undefined),
+      timePhysics: tP > 0 ? tP : undefined,
+      timeChemistry: tC > 0 ? tC : undefined,
+      timeMaths: tM > 0 ? tM : undefined,
       difficultyRating: difficulty || undefined,
       notes: notes.trim() || undefined,
       papers: livePapers,
@@ -221,6 +235,34 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
             <div><label className="field-label">Difficulty</label><div className="flex gap-1" style={{ paddingTop: 9 }}>{[1, 2, 3, 4, 5].map(n => <button key={n} onClick={() => setDifficulty(difficulty === n ? 0 : n)} style={{ padding: 4, background: 'none', border: 'none', cursor: 'pointer' }}><Star size={18} fill={n <= difficulty ? 'var(--warning)' : 'none'} stroke={n <= difficulty ? 'var(--warning)' : 'var(--text-tertiary)'} /></button>)}</div></div>
           </div>
           <div><label className="field-label">Notes / Reflection</label><textarea className="field" rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="What went well? What to improve?" style={{ resize: 'none' }} /></div>
+
+          {/* Time per subject */}
+          <div className="card" style={{ padding: 16, background: 'var(--bg-elevated)' }}>
+            <div className="flex items-center gap-2 mb-3">
+              <Clock size={14} style={{ color: 'var(--accent)' }} />
+              <span className="section-label">Time Per Subject (minutes)</span>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div><label className="field-label" style={{ marginBottom: 3 }}>Physics</label><input type="number" className="field" style={{ padding: '7px 10px', fontSize: 13 }} value={timePhysics} onChange={e => setTimePhysics(e.target.value)} placeholder="50" min={0} max={180} /></div>
+              <div><label className="field-label" style={{ marginBottom: 3 }}>Chemistry</label><input type="number" className="field" style={{ padding: '7px 10px', fontSize: 13 }} value={timeChemistry} onChange={e => setTimeChemistry(e.target.value)} placeholder="40" min={0} max={180} /></div>
+              <div><label className="field-label" style={{ marginBottom: 3 }}>Maths</label><input type="number" className="field" style={{ padding: '7px 10px', fontSize: 13 }} value={timeMaths} onChange={e => setTimeMaths(e.target.value)} placeholder="90" min={0} max={180} /></div>
+            </div>
+            <div className="flex items-center justify-between mt-3" style={{ paddingTop: 10, borderTop: '1px solid var(--border-subtle)' }}>
+              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Total: {totalTime} / 180 min</span>
+              {hasTimeData && (
+                <span style={{ fontSize: 11, fontWeight: 600, color: timeExceeds ? 'var(--danger)' : 'var(--success)' }}>
+                  {timeExceeds ? `Exceeds by ${totalTime - 180} min` : `${180 - totalTime} min remaining`}
+                </span>
+              )}
+            </div>
+            {timeExceeds && (
+              <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 'var(--radius-button)', background: 'var(--danger-bg)', border: '1px solid rgba(245,69,92,0.2)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <AlertTriangle size={12} style={{ color: 'var(--danger)', flexShrink: 0 }} />
+                <span style={{ fontSize: 11, color: 'var(--danger)' }}>Total time exceeds the 180-minute exam limit. Adjust your inputs.</span>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div><label className="field-label">Percentile (optional)</label><input type="number" step="0.01" className="field" value={percentile} onChange={e => setPercentile(e.target.value)} placeholder="99.5" /></div>
             <div><label className="field-label">Target Score (optional)</label><input type="number" className="field" value={targetScore} onChange={e => setTargetScore(e.target.value)} placeholder={`e.g. ${Math.round(template.totalMaxMarks * 0.8)}`} /></div>

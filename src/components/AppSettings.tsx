@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Upload, Trash2, AlertTriangle, CheckCircle, Database, Shield } from 'lucide-react';
+import { Download, Upload, Trash2, AlertTriangle, CheckCircle, Database, Shield, LogOut } from 'lucide-react';
 import { Mistake, ImportantNote, InorganicAssignment, Subject, ErrorCategory, Priority, MistakeStatus, AssignmentType, ExamTemplate, TestAttempt, SyllabusChapter, ChapterClass, Weightage } from '../types';
 
 interface AppSettingsProps {
@@ -10,8 +10,10 @@ interface AppSettingsProps {
   testAttempts: TestAttempt[];
   syllabus: SyllabusChapter[];
   onReset: () => void;
-  onImport: (data: { mistakes: Mistake[]; notes: ImportantNote[]; assignments: InorganicAssignment[]; testTemplates: ExamTemplate[]; testAttempts: TestAttempt[]; syllabus: SyllabusChapter[] }) => void;
+  onImport: (data: { mistakes: Mistake[]; notes: ImportantNote[]; assignments: InorganicAssignment[]; testTemplates?: ExamTemplate[]; testAttempts?: TestAttempt[]; syllabus?: SyllabusChapter[] }) => void;
   onClose: () => void;
+  onSignOut?: () => void;
+  userEmail?: string | null;
 }
 
 const VALID_SUBJECTS: Subject[] = ['Physics', 'Mathematics', 'Physical Chemistry', 'Organic Chemistry', 'Inorganic Chemistry'];
@@ -96,7 +98,13 @@ function sanitizeAttempt(x: unknown): TestAttempt | null {
   if (typeof o.templateId !== 'string' || !o.templateId) return null;
   if (!Array.isArray(o.papers)) return null;
   if (typeof o.date !== 'string' || !o.date) return null;
-  return o as unknown as TestAttempt;
+  const base = o as unknown as TestAttempt;
+  return {
+    ...base,
+    timePhysics: typeof o.timePhysics === 'number' ? o.timePhysics : undefined,
+    timeChemistry: typeof o.timeChemistry === 'number' ? o.timeChemistry : undefined,
+    timeMaths: typeof o.timeMaths === 'number' ? o.timeMaths : undefined,
+  };
 }
 
 function sanitizeChapter(x: unknown): SyllabusChapter | null {
@@ -114,13 +122,13 @@ function sanitizeChapter(x: unknown): SyllabusChapter | null {
   };
 }
 
-export function AppSettings({ mistakes, notes, assignments, testTemplates, testAttempts, syllabus, onReset, onImport, onClose }: AppSettingsProps) {
+export function AppSettings({ mistakes, notes, assignments, testTemplates, testAttempts, syllabus, onReset, onImport, onClose, onSignOut, userEmail }: AppSettingsProps) {
   const [resetStep, setResetStep] = useState<0 | 1 | 2>(0);
   const [importStatus, setImportStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [importMsg, setImportMsg] = useState('');
 
   const handleExport = () => {
-    const payload = { version: '5.0', exportDate: new Date().toISOString(), mistakes, notes, assignments, testTemplates, testAttempts, syllabus };
+    const payload = { version: '6.0', exportDate: new Date().toISOString(), mistakes, notes, assignments, testTemplates, testAttempts, syllabus };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -178,8 +186,8 @@ export function AppSettings({ mistakes, notes, assignments, testTemplates, testA
       </div>
 
       <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-card)', background: 'var(--accent-muted-bg)', border: '1px solid rgba(13,148,136,0.15)' }}>
-        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>EXPORT FORMAT v5.0</p>
-        <p style={{ fontSize: 10, color: 'var(--text-tertiary)', lineHeight: 1.6, fontFamily: 'monospace' }}>{'{ version, exportDate, mistakes[], notes[], assignments[], testTemplates[], testAttempts[], syllabus[] }'}</p>
+        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>EXPORT FORMAT v6.0</p>
+        <p style={{ fontSize: 10, color: 'var(--text-tertiary)', lineHeight: 1.6, fontFamily: 'monospace' }}>{'{ version, exportDate, mistakes[], notes[], assignments[], testTemplates[], testAttempts[] }'}</p>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -251,7 +259,19 @@ export function AppSettings({ mistakes, notes, assignments, testTemplates, testA
           </div>
         )}
       </div>
-      <p style={{ fontSize: 10, color: 'var(--text-tertiary)', textAlign: 'center' }}>All data lives in your browser's localStorage · 100% offline · nothing leaves your device</p>
+      <p style={{ fontSize: 10, color: 'var(--text-tertiary)', textAlign: 'center' }}>Test data syncs to your account · Mistakes, notes & assignments stay in your browser</p>
+
+      {onSignOut && (
+        <div style={{ padding: '14px 16px', borderRadius: 'var(--radius-card)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', gap: 16 }}>
+          <div>
+            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>Signed in as</p>
+            <p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{userEmail ?? '—'}</p>
+          </div>
+          <button onClick={() => { onSignOut(); onClose(); }} className="btn-ghost" style={{ borderColor: 'rgba(245,69,92,0.2)', color: 'var(--danger)', flexShrink: 0 }}>
+            <LogOut size={13} />Sign Out
+          </button>
+        </div>
+      )}
     </div>
   );
 }

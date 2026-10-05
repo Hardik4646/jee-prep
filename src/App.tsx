@@ -1,12 +1,15 @@
 import { useState, useCallback, Suspense, lazy } from 'react';
 import { Sidebar, BottomNav } from './components/Navigation';
 import { useLocalStorage } from './hooks/useLocalStorage';
-import { Mistake, ImportantNote, InorganicAssignment, GamificationState, View, ExamTemplate, TestAttempt, SyllabusChapter } from './types';
+import { useAuth } from './hooks/useAuth';
+import { useTestData } from './hooks/useTestData';
+import { Mistake, ImportantNote, InorganicAssignment, GamificationState, SyllabusChapter, View } from './types';
 import { dummyMistakes, dummyNotes, dummyAssignments } from './data/dummyData';
 import { SEED_SYLLABUS } from './data/syllabus';
 import { getLevelFromXP } from './data/gamification';
 import { X, Settings } from 'lucide-react';
 import { format } from 'date-fns';
+import { Login } from './components/Login';
 
 const Dashboard = lazy(() => import('./components/Dashboard').then(m => ({ default: m.Dashboard })));
 const MistakeLedger = lazy(() => import('./components/MistakeLedger').then(m => ({ default: m.MistakeLedger })));
@@ -14,8 +17,8 @@ const AnalyticsDashboard = lazy(() => import('./components/AnalyticsDashboard').
 const JEEExamStrategy = lazy(() => import('./components/JEEExamStrategy').then(m => ({ default: m.JEEExamStrategy })));
 const ImportantNotes = lazy(() => import('./components/ImportantNotes').then(m => ({ default: m.ImportantNotes })));
 const AssignmentsTracker = lazy(() => import('./components/AssignmentsTracker').then(m => ({ default: m.AssignmentsTracker })));
-const TestTracker = lazy(() => import('./components/TestTracker').then(m => ({ default: m.TestTracker })));
 const SyllabusTracker = lazy(() => import('./components/SyllabusTracker').then(m => ({ default: m.SyllabusTracker })));
+const TestTracker = lazy(() => import('./components/TestTracker').then(m => ({ default: m.TestTracker })));
 const AppSettings = lazy(() => import('./components/AppSettings').then(m => ({ default: m.AppSettings })));
 
 const DEFAULT_GAMIFICATION: GamificationState = {
@@ -32,17 +35,26 @@ function RouteLoader() {
   );
 }
 
+function FullScreenLoader() {
+  return (
+    <div style={{ minHeight: '100vh', background: 'var(--bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ width: 32, height: 32, borderRadius: '50%', border: '2px solid var(--border-subtle)', borderTopColor: 'var(--accent)', animation: 'spin 0.6s linear infinite' }} />
+    </div>
+  );
+}
+
 export default function App() {
+  const { user, loading: authLoading, signOut } = useAuth();
+  const testData = useTestData();
+
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [showSettings, setShowSettings] = useState(false);
 
   const [mistakes, setMistakes] = useLocalStorage<Mistake[]>('jee-mistakes-v4', dummyMistakes);
   const [notes, setNotes] = useLocalStorage<ImportantNote[]>('jee-notes-v4', dummyNotes);
   const [assignments, setAssignments] = useLocalStorage<InorganicAssignment[]>('jee-assignments-v4', dummyAssignments);
-  const [testTemplates, setTestTemplates] = useLocalStorage<ExamTemplate[]>('jee-test-templates-v4', []);
-  const [testAttempts, setTestAttempts] = useLocalStorage<TestAttempt[]>('jee-test-attempts-v4', []);
-  const [syllabus, setSyllabus] = useLocalStorage<SyllabusChapter[]>('jee-syllabus-v1', SEED_SYLLABUS);
   const [gamification, setGamification] = useLocalStorage<GamificationState>('jee-gamification-v4', DEFAULT_GAMIFICATION);
+  const [syllabus, setSyllabus] = useLocalStorage<SyllabusChapter[]>('jee-syllabus-v4', SEED_SYLLABUS);
 
   const handleXP = useCallback((amount: number) => {
     setGamification(prev => {
@@ -61,49 +73,62 @@ export default function App() {
     localStorage.setItem('jee-mistakes-v4', JSON.stringify([]));
     localStorage.setItem('jee-notes-v4', JSON.stringify([]));
     localStorage.setItem('jee-assignments-v4', JSON.stringify([]));
-    localStorage.setItem('jee-test-templates-v4', JSON.stringify([]));
-    localStorage.setItem('jee-test-attempts-v4', JSON.stringify([]));
-    localStorage.setItem('jee-syllabus-v1', JSON.stringify(SEED_SYLLABUS));
     localStorage.setItem('jee-gamification-v4', JSON.stringify(DEFAULT_GAMIFICATION));
-    setMistakes([]); setNotes([]); setAssignments([]); setTestTemplates([]); setTestAttempts([]); setSyllabus(SEED_SYLLABUS.map(c => ({ ...c }))); setGamification(DEFAULT_GAMIFICATION);
+    setMistakes([]); setNotes([]); setAssignments([]); setGamification(DEFAULT_GAMIFICATION);
   };
 
-  const handleImport = (data: { mistakes: Mistake[]; notes: ImportantNote[]; assignments: InorganicAssignment[]; testTemplates: ExamTemplate[]; testAttempts: TestAttempt[]; syllabus: SyllabusChapter[] }) => {
+  const handleImport = (data: { mistakes: Mistake[]; notes: ImportantNote[]; assignments: InorganicAssignment[]; testTemplates?: any[]; testAttempts?: any[]; syllabus?: SyllabusChapter[] }) => {
     localStorage.setItem('jee-mistakes-v4', JSON.stringify(data.mistakes));
     localStorage.setItem('jee-notes-v4', JSON.stringify(data.notes));
     localStorage.setItem('jee-assignments-v4', JSON.stringify(data.assignments));
-    if (data.testTemplates.length > 0) localStorage.setItem('jee-test-templates-v4', JSON.stringify(data.testTemplates));
-    if (data.testAttempts.length > 0) localStorage.setItem('jee-test-attempts-v4', JSON.stringify(data.testAttempts));
-    if (data.syllabus.length > 0) localStorage.setItem('jee-syllabus-v1', JSON.stringify(data.syllabus));
     setMistakes(data.mistakes); setNotes(data.notes); setAssignments(data.assignments);
-    if (data.testTemplates.length > 0) setTestTemplates(data.testTemplates);
-    if (data.testAttempts.length > 0) setTestAttempts(data.testAttempts);
-    if (data.syllabus.length > 0) setSyllabus(data.syllabus);
+    if (data.syllabus) { localStorage.setItem('jee-syllabus-v4', JSON.stringify(data.syllabus)); setSyllabus(data.syllabus); }
+    if (data.testTemplates) {
+      testData.setTemplates(data.testTemplates);
+      data.testTemplates.forEach((t: any) => testData.saveTemplateToDB(t));
+    }
+    if (data.testAttempts) {
+      testData.setAttempts(data.testAttempts);
+      data.testAttempts.forEach((a: any) => testData.saveAttemptToDB(a));
+    }
   };
+
+  if (authLoading) return <FullScreenLoader />;
+  if (!user) return <Login />;
 
   const safeM = Array.isArray(mistakes) ? mistakes : [];
   const safeN = Array.isArray(notes) ? notes : [];
   const safeA = Array.isArray(assignments) ? assignments : [];
-  const safeT = Array.isArray(testTemplates) ? testTemplates : [];
-  const safeTA = Array.isArray(testAttempts) ? testAttempts : [];
-  const safeSyl = Array.isArray(syllabus) && syllabus.length > 0 ? syllabus : SEED_SYLLABUS;
   const safeG = (gamification as GamificationState) ?? DEFAULT_GAMIFICATION;
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-base)', display: 'flex', color: 'var(--text-secondary)' }}>
-      <Sidebar currentView={currentView} setCurrentView={setCurrentView} onSettingsClick={() => setShowSettings(true)} />
+      <Sidebar currentView={currentView} setCurrentView={setCurrentView} onSettingsClick={() => setShowSettings(true)} onSignOut={signOut} userEmail={user.email} />
 
       <main style={{ flex: 1, minHeight: '100vh', paddingBottom: 72, overflowX: 'hidden' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 16px' }} className="md:!px-8">
           <Suspense fallback={<RouteLoader />}>
             {currentView === 'dashboard'    && <Dashboard mistakes={safeM} gamification={safeG} setCurrentView={setCurrentView} />}
             {currentView === 'ledger'       && <MistakeLedger mistakes={safeM} setMistakes={setMistakes} onXP={handleXP} />}
-            {currentView === 'tests'        && <TestTracker templates={safeT} setTemplates={setTestTemplates} attempts={safeTA} setAttempts={setTestAttempts} mistakes={safeM} setMistakes={setMistakes} onXP={handleXP} />}
+            {currentView === 'tests'        && <TestTracker
+              templates={testData.templates}
+              setTemplates={testData.setTemplates}
+              attempts={testData.attempts}
+              setAttempts={testData.setAttempts}
+              mistakes={safeM}
+              setMistakes={setMistakes}
+              onXP={handleXP}
+              saveTemplateToDB={testData.saveTemplateToDB}
+              deleteTemplateFromDB={testData.deleteTemplateFromDB}
+              saveAttemptToDB={testData.saveAttemptToDB}
+              deleteAttemptFromDB={testData.deleteAttemptFromDB}
+              testLoading={testData.loading}
+            />}
             {currentView === 'analytics'   && <AnalyticsDashboard mistakes={safeM} />}
+            {currentView === 'syllabus'    && <SyllabusTracker chapters={syllabus} setChapters={setSyllabus} onXP={handleXP} />}
             {currentView === 'strategy'    && <JEEExamStrategy mistakes={safeM} setMistakes={setMistakes} />}
             {currentView === 'notes'       && <ImportantNotes notes={safeN} setNotes={setNotes} />}
             {currentView === 'assignments' && <AssignmentsTracker assignments={safeA} setAssignments={setAssignments} />}
-            {currentView === 'syllabus'    && <SyllabusTracker chapters={safeSyl} setChapters={setSyllabus} onXP={handleXP} />}
           </Suspense>
         </div>
       </main>
@@ -115,12 +140,12 @@ export default function App() {
           <div className="card animate-slide-up" style={{ maxWidth: 460, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 34, height: 34, borderRadius: 'var(--radius-button)', background: 'var(--accent-muted-bg)', border: '1px solid rgba(13,148,136,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: 34, height: 34, borderRadius: 'var(--radius-button)', background: 'var(--accent-muted-bg)', border: '1px solid rgba(79,107,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Settings size={15} style={{ color: 'var(--accent)' }} />
                 </div>
                 <div>
                   <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1 }}>Settings & Data</p>
-                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>Manage your local database</p>
+                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>Manage your data</p>
                 </div>
               </div>
               <button onClick={() => setShowSettings(false)} className="btn-ghost" style={{ padding: '7px 9px' }}>
@@ -128,7 +153,19 @@ export default function App() {
               </button>
             </div>
             <Suspense fallback={<RouteLoader />}>
-              <AppSettings mistakes={safeM} notes={safeN} assignments={safeA} testTemplates={safeT} testAttempts={safeTA} syllabus={safeSyl} onReset={handleResetAll} onImport={handleImport} onClose={() => setShowSettings(false)} />
+              <AppSettings
+                mistakes={safeM}
+                notes={safeN}
+                assignments={safeA}
+                testTemplates={testData.templates}
+                testAttempts={testData.attempts}
+                syllabus={Array.isArray(syllabus) ? syllabus : []}
+                onReset={handleResetAll}
+                onImport={handleImport}
+                onClose={() => setShowSettings(false)}
+                onSignOut={signOut}
+                userEmail={user.email}
+              />
             </Suspense>
           </div>
         </div>

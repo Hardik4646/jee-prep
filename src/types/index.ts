@@ -172,4 +172,7 @@ export interface TestAttempt {
   percentile?: number;
   targetAchieved: boolean;
   createdAt: number;
+  timePhysics?: number;
+  timeChemistry?: number;
+  timeMaths?: number;
 }

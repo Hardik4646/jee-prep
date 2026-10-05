@@ -15,11 +15,19 @@ interface TestTrackerProps {
   mistakes: Mistake[];
   setMistakes: (m: Mistake[] | ((p: Mistake[]) => Mistake[])) => void;
   onXP: (amount: number) => void;
+  saveTemplateToDB: (t: ExamTemplate) => Promise<void>;
+  deleteTemplateFromDB: (id: string) => Promise<void>;
+  saveAttemptToDB: (a: TestAttempt) => Promise<void>;
+  deleteAttemptFromDB: (id: string) => Promise<void>;
+  testLoading: boolean;
 }
 
 type Tab = 'history' | 'analytics' | 'templates';
 
-export function TestTracker({ templates, setTemplates, attempts, setAttempts, setMistakes, onXP }: TestTrackerProps) {
+export function TestTracker({
+  templates, setTemplates, attempts, setAttempts, setMistakes, onXP,
+  saveTemplateToDB, deleteTemplateFromDB, saveAttemptToDB, deleteAttemptFromDB, testLoading,
+}: TestTrackerProps) {
   const [tab, setTab] = useState<Tab>('history');
   const [showTemplateBuilder, setShowTemplateBuilder] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<ExamTemplate | null>(null);
@@ -32,17 +40,20 @@ export function TestTracker({ templates, setTemplates, attempts, setAttempts, se
       const exists = arr.some(t => t.id === tpl.id);
       return exists ? arr.map(t => t.id === tpl.id ? tpl : t) : [...arr, tpl];
     });
+    saveTemplateToDB(tpl);
     setShowTemplateBuilder(false);
     setEditingTemplate(null);
-  }, [setTemplates]);
+  }, [setTemplates, saveTemplateToDB]);
 
   const handleDuplicateTemplate = (tpl: ExamTemplate) => {
     const dup: ExamTemplate = { ...tpl, id: genId(), name: `${tpl.name} (Copy)`, createdAt: Date.now(), timesUsed: 0 };
     setTemplates(prev => [...(Array.isArray(prev) ? prev : []), dup]);
+    saveTemplateToDB(dup);
   };
 
   const handleDeleteTemplate = (id: string) => {
     setTemplates(prev => (Array.isArray(prev) ? prev : []).filter(t => t.id !== id));
+    deleteTemplateFromDB(id);
   };
 
   const handleSaveAttempt = useCallback((attempt: TestAttempt, wrongQuestions: { chapter: string; errorCategory: string }[]) => {
@@ -51,9 +62,8 @@ export function TestTracker({ templates, setTemplates, attempts, setAttempts, se
       const exists = arr.some(a => a.id === attempt.id);
       return exists ? arr.map(a => a.id === attempt.id ? attempt : a) : [attempt, ...arr];
     });
+    saveAttemptToDB(attempt);
     if (!editingAttempt) {
-      // Only award XP / bump template usage / create ledger mistakes for genuinely new attempts —
-      // editing an existing one is a correction, not a new study session.
       setTemplates(prev => (Array.isArray(prev) ? prev : []).map(t => t.id === attempt.templateId ? { ...t, timesUsed: t.timesUsed + 1 } : t));
       onXP(30);
       if (wrongQuestions.length > 0) {
@@ -63,16 +73,25 @@ export function TestTracker({ templates, setTemplates, attempts, setAttempts, se
     }
     setShowLogTest(false);
     setEditingAttempt(null);
-  }, [setAttempts, setTemplates, setMistakes, onXP, editingAttempt]);
+  }, [setAttempts, setTemplates, setMistakes, onXP, editingAttempt, saveAttemptToDB]);
 
   const handleDeleteAttempt = (id: string) => {
     setAttempts(prev => (Array.isArray(prev) ? prev : []).filter(a => a.id !== id));
+    deleteAttemptFromDB(id);
   };
 
   const handleEditAttempt = (attempt: TestAttempt) => {
     setEditingAttempt(attempt);
     setShowLogTest(true);
   };
+
+  if (testLoading) {
+    return (
+      <div className="flex items-center justify-center" style={{ minHeight: 300 }}>
+        <div style={{ width: 24, height: 24, borderRadius: '50%', border: '2px solid var(--border-subtle)', borderTopColor: 'var(--accent)', animation: 'spin 0.6s linear infinite' }} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-slide-up">
