@@ -1,13 +1,11 @@
 import { useState } from 'react';
-import { LayoutDashboard, FileText, BarChart3, BookOpen, ClipboardCheck, Zap, Settings, ChevronRight, ClipboardList, GraduationCap, LogOut } from 'lucide-react';
+import { LayoutDashboard, FileText, BarChart3, BookOpen, ClipboardCheck, Zap, Settings, ChevronRight, ClipboardList, GraduationCap } from 'lucide-react';
 import { View } from '../types';
 
 interface NavProps {
   currentView: View;
   setCurrentView: (v: View) => void;
   onSettingsClick: () => void;
-  onSignOut?: () => void;
-  userEmail?: string | null;
 }
 
 const NAV = [
@@ -23,7 +21,7 @@ const NAV = [
 
 const MOBILE_NAV = NAV.filter(n => n.id !== 'strategy' && n.id !== 'notes' && n.id !== 'syllabus');
 
-export function Sidebar({ currentView, setCurrentView, onSettingsClick, onSignOut, userEmail }: NavProps) {
+export function Sidebar({ currentView, setCurrentView, onSettingsClick }: NavProps) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -72,25 +70,13 @@ export function Sidebar({ currentView, setCurrentView, onSettingsClick, onSignOu
         })}
       </nav>
 
-      {/* Settings + Sign out */}
+      {/* Settings */}
       <div className="px-2 pb-5 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
         <button onClick={onSettingsClick} title={!expanded ? 'Settings' : undefined}
-          className="w-full flex items-center gap-3 btn-ghost" style={{ borderRadius: 'var(--radius-button)', padding: '10px 12px', justifyContent: 'flex-start', marginBottom: 4 }}>
+          className="w-full flex items-center gap-3 btn-ghost" style={{ borderRadius: 'var(--radius-button)', padding: '10px 12px', justifyContent: 'flex-start' }}>
           <Settings size={17} style={{ flexShrink: 0, color: 'var(--text-tertiary)' }} />
           <span className="nav-label" style={{ opacity: expanded ? 1 : 0, transition: 'opacity 160ms', whiteSpace: 'nowrap' }}>Settings</span>
         </button>
-        {onSignOut && (
-          <button onClick={onSignOut} title={!expanded ? 'Sign Out' : undefined}
-            className="w-full flex items-center gap-3" style={{ borderRadius: 'var(--radius-button)', padding: '10px 12px', justifyContent: 'flex-start', background: 'transparent', border: '1px solid transparent', cursor: 'pointer', color: 'var(--text-tertiary)', transition: 'all 150ms' }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--danger-bg)'; e.currentTarget.style.color = 'var(--danger)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-tertiary)'; }}>
-            <LogOut size={17} style={{ flexShrink: 0 }} />
-            <span className="nav-label" style={{ opacity: expanded ? 1 : 0, transition: 'opacity 160ms', whiteSpace: 'nowrap' }}>Sign Out</span>
-          </button>
-        )}
-        {userEmail && expanded && (
-          <p style={{ fontSize: 10, color: 'var(--text-tertiary)', padding: '4px 12px', marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userEmail}</p>
-        )}
       </div>
     </aside>
   );
