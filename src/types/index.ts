@@ -32,6 +32,9 @@ export interface Mistake {
   nextReviewAt?: number;
   reviewCount?: number;
   xpAwarded?: boolean;
+  marksLost?: number;
+  sourceAttemptId?: string;
+  questionTimeSeconds?: number;
 }
 
 export interface ImportantNote {
@@ -73,7 +76,15 @@ export interface DailyFact {
   subject: Subject;
 }
 
-export type View = 'dashboard' | 'ledger' | 'tests' | 'analytics' | 'notes' | 'assignments' | 'strategy' | 'syllabus';
+export type View =
+  | 'dashboard'
+  | 'ledger'
+  | 'tests'
+  | 'analytics'
+  | 'notes'
+  | 'assignments'
+  | 'strategy'
+  | 'syllabus';
 
 // ─── Syllabus Tracker Types ───────────────────────────────────────
 export type ChapterClass = '11' | '12';
@@ -112,17 +123,19 @@ export interface TemplateSubject {
   marksPerCorrect: number;
   negativePerWrong: number;
   partialMarking: boolean;
+  targetMinutes?: number;
 }
 
 export interface ExamTemplate {
   id: string;
   name: string;
   pattern: ExamPattern;
-  papers: TemplateSubject[][]; // 1 array for single, 2 arrays for dual
+  papers: TemplateSubject[][]; // 1 array for single (JEE Main 180m), 2 arrays for dual (JEE Advanced 2x180m = 360m)
   totalQuestions: number;
   totalMaxMarks: number;
   manualOverride: boolean;
   marksPreset: boolean[];
+  durationPerPaperMinutes?: number;
   createdAt: number;
   timesUsed: number;
 }
@@ -135,6 +148,16 @@ export interface SubjectScore {
   score: number;
   maxScore: number;
   accuracy: number;
+  marksLostToNegative?: number;
+  timeSpentMinutes?: number;
+  targetMinutes?: number;
+  totalQuestions?: number;
+}
+
+export interface PaperSubjectTiming {
+  physics: number;
+  chemistry: number;
+  maths: number;
 }
 
 export interface PaperScore {
@@ -146,6 +169,12 @@ export interface PaperScore {
   totalUnattempted: number;
   totalQuestions: number;
   accuracy: number;
+  marksLostToNegative?: number;
+  timePhysics?: number;
+  timeChemistry?: number;
+  timeMaths?: number;
+  timeTakenMinutes?: number;
+  targetDurationMinutes?: number;
 }
 
 export interface TestAttempt {
@@ -170,9 +199,39 @@ export interface TestAttempt {
   totalQuestions: number;
   marksLostToNegative: number;
   percentile?: number;
+  targetScore?: number;
   targetAchieved: boolean;
   createdAt: number;
+  /** Aggregated subject times across all papers (minutes) */
   timePhysics?: number;
   timeChemistry?: number;
   timeMaths?: number;
+  /** Per-paper subject timings (1 item for JEE Main single, 2 items for JEE Advanced dual) */
+  paperTimings?: PaperSubjectTiming[];
+}
+
+export interface WrongQuestionLogInput {
+  subject: Subject;
+  chapter: string;
+  errorCategory: ErrorCategory;
+  marksLost: number;
+  questionTimeSeconds?: number;
+  notes?: string;
+}
+
+export interface BackupSnapshot {
+  id: string;
+  timestamp: number;
+  label: string;
+  itemCount: number;
+  payload: {
+    version: string;
+    exportDate: string;
+    mistakes: Mistake[];
+    notes: ImportantNote[];
+    assignments: InorganicAssignment[];
+    testTemplates: ExamTemplate[];
+    testAttempts: TestAttempt[];
+    syllabus: SyllabusChapter[];
+  };
 }

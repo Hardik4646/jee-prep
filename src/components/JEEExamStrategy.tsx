@@ -17,7 +17,13 @@ const SUBJECT_COLORS: Record<Subject, string> = {
   'Organic Chemistry': '#22C55E', 'Inorganic Chemistry': '#F5455C',
 };
 
-const ChartTip = ({ active, payload }: any) => {
+const ChartTip = ({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ name?: string; value?: number; payload: { color: string } }>;
+}) => {
   if (!active || !payload?.length) return null;
   return <div className="card" style={{ padding: '10px 12px' }}><p style={{ fontSize: 13, fontWeight: 700, color: payload[0].payload.color }}>{payload[0].name}: {payload[0].value}</p></div>;
 };
@@ -154,7 +160,7 @@ export function JEEExamStrategy({ mistakes, setMistakes }: JEEExamStrategyProps)
             </div>
             <p className="card-title">High Priority — Revise Now</p>
           </div>
-          <select value={focusSubject} onChange={e => setFocusSubject(e.target.value as any)} className="field" style={{ width: 'auto', padding: '7px 12px', fontSize: 12 }}>
+          <select value={focusSubject} onChange={e => setFocusSubject(e.target.value as Subject | 'all')} className="field" style={{ width: 'auto', padding: '7px 12px', fontSize: 12 }}>
             <option value="all">All Subjects</option>
             {SUBJECTS.map(s => <option key={s}>{s}</option>)}
           </select>

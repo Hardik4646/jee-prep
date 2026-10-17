@@ -4,7 +4,6 @@ export function useLocalStorage<T>(
   key: string,
   initialValue: T
 ): [T, (value: T | ((prev: T) => T)) => void, () => void] {
-
   const [storedValue, setStoredValue] = useState<T>(() => {
     try {
       const item = window.localStorage.getItem(key);
@@ -17,10 +16,8 @@ export function useLocalStorage<T>(
     }
   });
 
-  // Track whether we're in a suppressed-write state (after reset)
   const suppressNextWrite = useRef(false);
 
-  // Synchronously persist on every state change, skipping suppressed writes
   useEffect(() => {
     if (suppressNextWrite.current) {
       suppressNextWrite.current = false;
@@ -30,7 +27,7 @@ export function useLocalStorage<T>(
       window.localStorage.setItem(key, JSON.stringify(storedValue));
     } catch (error) {
       if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-        alert('Storage quota exceeded. Export and clear data to continue.');
+        console.warn(`LocalStorage quota reached while saving key "${key}". Use Settings -> Export Backup.`);
       }
     }
   }, [key, storedValue]);
@@ -44,7 +41,11 @@ export function useLocalStorage<T>(
 
   const resetValue = useCallback(() => {
     suppressNextWrite.current = true;
-    window.localStorage.removeItem(key);
+    try {
+      window.localStorage.removeItem(key);
+    } catch {
+      // Ignore storage access errors
+    }
     setStoredValue(initialValue);
   }, [key, initialValue]);
 
