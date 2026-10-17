@@ -10,7 +10,6 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceDot,
-  ReferenceLine,
   Label,
   Legend,
 } from 'recharts';
@@ -437,7 +436,6 @@ export function TestAnalytics({
   const [dateTo, setDateTo] = useState('');
   const [chartMode, setChartMode] = useState<ChartMode>('mainVsAdv');
   const [selectedAttemptIdx, setSelectedAttemptIdx] = useState<number | null>(null);
-  const [timeViewMode, setTimeViewMode] = useState<'overall' | 'advPapers'>('overall');
 
   const filtered = useMemo(() => {
     return attempts
@@ -487,14 +485,14 @@ export function TestAnalytics({
     }));
   }, [filtered]);
 
-  // 2. Subject-wise Time Spent vs. Target Time (Normalized per 3-hour paper = 60 min target per subject)
+  // 2. Subject-wise Time Spent vs. Ideal Time (Normalized per 3-hour paper: 50m Physics, 40m Chemistry, 90m Maths)
   const subjectTimeComparison = useMemo(() => {
     const timed = filtered.filter(
       a => (a.timePhysics ?? 0) > 0 || (a.timeChemistry ?? 0) > 0 || (a.timeMaths ?? 0) > 0
     );
     if (!timed.length) return null;
 
-    // Normalize per paper (1 paper for Main, 2 papers for Advanced) so target is strictly 60m per paper
+    // Normalize per 3-hour paper (1 paper for Main, 2 papers for Advanced)
     let phyPaperSum = 0;
     let chemPaperSum = 0;
     let mathPaperSum = 0;
@@ -529,80 +527,28 @@ export function TestAnalytics({
       });
     });
 
-    const overallBars = [
+    const bars = [
       {
         subject: 'Physics',
         actualMin: Number((phyPaperSum / paperCount).toFixed(1)),
-        targetMin: 60,
+        targetMin: 50,
         secPerQ: phyQ > 0 ? Math.round((phyTotalMin * 60) / phyQ) : 0,
       },
       {
         subject: 'Chemistry',
         actualMin: Number((chemPaperSum / paperCount).toFixed(1)),
-        targetMin: 60,
+        targetMin: 40,
         secPerQ: chemQ > 0 ? Math.round((chemTotalMin * 60) / chemQ) : 0,
       },
       {
         subject: 'Mathematics',
         actualMin: Number((mathPaperSum / paperCount).toFixed(1)),
-        targetMin: 60,
+        targetMin: 90,
         secPerQ: mathQ > 0 ? Math.round((mathTotalMin * 60) / mathQ) : 0,
       },
     ];
 
-    // JEE Advanced Paper 1 vs Paper 2 independent timing breakdown
-    const dualTimed = timed.filter(a => a.pattern === 'dual');
-    let p1Phy = 0,
-      p1Chem = 0,
-      p1Math = 0,
-      p2Phy = 0,
-      p2Chem = 0,
-      p2Math = 0;
-    dualTimed.forEach(a => {
-      const p1 = a.paperTimings?.[0] ?? {
-        physics: a.papers[0]?.timePhysics ?? (a.timePhysics ?? 0) / 2,
-        chemistry: a.papers[0]?.timeChemistry ?? (a.timeChemistry ?? 0) / 2,
-        maths: a.papers[0]?.timeMaths ?? (a.timeMaths ?? 0) / 2,
-      };
-      const p2 = a.paperTimings?.[1] ?? {
-        physics: a.papers[1]?.timePhysics ?? (a.timePhysics ?? 0) / 2,
-        chemistry: a.papers[1]?.timeChemistry ?? (a.timeChemistry ?? 0) / 2,
-        maths: a.papers[1]?.timeMaths ?? (a.timeMaths ?? 0) / 2,
-      };
-      p1Phy += p1.physics;
-      p1Chem += p1.chemistry;
-      p1Math += p1.maths;
-      p2Phy += p2.physics;
-      p2Chem += p2.chemistry;
-      p2Math += p2.maths;
-    });
-
-    const nDual = Math.max(1, dualTimed.length);
-    const advPaperBars =
-      dualTimed.length > 0
-        ? [
-            {
-              subject: 'Physics',
-              paper1Min: Number((p1Phy / nDual).toFixed(1)),
-              paper2Min: Number((p2Phy / nDual).toFixed(1)),
-              targetMin: 60,
-            },
-            {
-              subject: 'Chemistry',
-              paper1Min: Number((p1Chem / nDual).toFixed(1)),
-              paper2Min: Number((p2Chem / nDual).toFixed(1)),
-              targetMin: 60,
-            },
-            {
-              subject: 'Mathematics',
-              paper1Min: Number((p1Math / nDual).toFixed(1)),
-              paper2Min: Number((p2Math / nDual).toFixed(1)),
-              targetMin: 60,
-            },
-          ]
-        : null;
-
-    return { overallBars, advPaperBars };
+    return { bars };
   }, [filtered]);
 
   // 3. Topic & Subject Negative-Mark Cost Heatmap
@@ -1085,147 +1031,65 @@ export function TestAnalytics({
 
       {/* Subject-wise Time Spent vs. Target Time + Negative Marking Topic Heatmap */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Subject-wise Time Spent vs Target Time (60m per paper) */}
+        {/* Single Unified Subject-wise Time Spent vs Ideal Time Graph */}
         <div className="card" style={{ padding: 22 }}>
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div>
-              <p className="card-title">Subject Time Spent vs. 60m Target</p>
+              <p className="card-title">Subject Time Spent vs. Ideal Time</p>
               <p style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 2 }}>
-                Normalized per 3-hour paper (60m Physics · 60m Chemistry · 60m Maths)
+                Normalized per 3-hour paper (Ideal: 50m Physics · 40m Chemistry · 90m Maths)
               </p>
             </div>
-            {subjectTimeComparison?.advPaperBars && (
-              <div
-                className="flex gap-1"
-                style={{
-                  background: 'var(--bg-elevated)',
-                  borderRadius: 'var(--radius-button)',
-                  padding: 2,
-                  border: '1px solid var(--border-subtle)',
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => setTimeViewMode('overall')}
-                  style={{
-                    padding: '4px 9px',
-                    borderRadius: 6,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    border: 'none',
-                    cursor: 'pointer',
-                    background: timeViewMode === 'overall' ? 'var(--accent)' : 'transparent',
-                    color: timeViewMode === 'overall' ? '#fff' : 'var(--text-tertiary)',
-                  }}
-                >
-                  All Papers
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTimeViewMode('advPapers')}
-                  style={{
-                    padding: '4px 9px',
-                    borderRadius: 6,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    border: 'none',
-                    cursor: 'pointer',
-                    background: timeViewMode === 'advPapers' ? 'var(--accent)' : 'transparent',
-                    color: timeViewMode === 'advPapers' ? '#fff' : 'var(--text-tertiary)',
-                  }}
-                >
-                  Adv P1 vs P2
-                </button>
-              </div>
-            )}
           </div>
 
           {subjectTimeComparison ? (
             <>
               <div style={{ height: 220 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  {timeViewMode === 'advPapers' && subjectTimeComparison.advPaperBars ? (
-                    <BarChart
-                      data={subjectTimeComparison.advPaperBars}
-                      margin={{ left: -12, right: 12, top: 10, bottom: 0 }}
-                    >
-                      <CartesianGrid strokeDasharray="0" stroke="var(--border-subtle)" vertical={false} />
-                      <XAxis dataKey="subject" tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} stroke="transparent" />
-                      <YAxis
-                        domain={[0, 90]}
-                        tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }}
-                        stroke="transparent"
-                        width={36}
-                      />
-                      <Tooltip
-                        content={({ active, payload, label }) => {
-                          if (!active || !payload?.length) return null;
-                          return (
-                            <div className="card-glass" style={{ padding: '10px 12px' }}>
-                              <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
-                                {label} (JEE Advanced)
+                  <BarChart
+                    data={subjectTimeComparison.bars}
+                    margin={{ left: -12, right: 12, top: 10, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="0" stroke="var(--border-subtle)" vertical={false} />
+                    <XAxis dataKey="subject" tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} stroke="transparent" />
+                    <YAxis
+                      domain={[0, 105]}
+                      tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }}
+                      stroke="transparent"
+                      width={36}
+                    />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null;
+                        const row = payload[0]?.payload;
+                        return (
+                          <div className="card-glass" style={{ padding: '10px 12px' }}>
+                            <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
+                              {label}
+                            </p>
+                            <p className="tabular-num" style={{ fontSize: 11.5, color: '#0D9488', fontWeight: 700 }}>
+                              Actual Avg: {row.actualMin} min / paper
+                            </p>
+                            <p className="tabular-num" style={{ fontSize: 11.5, color: '#F59E0B', fontWeight: 600 }}>
+                              Ideal Time: {row.targetMin} min / paper
+                            </p>
+                            {row.secPerQ > 0 && (
+                              <p className="tabular-num" style={{ fontSize: 11, color: '#38BDF8', marginTop: 2 }}>
+                                Avg Question Speed: {row.secPerQ}s / Q
                               </p>
-                              {payload.map((p, idx: number) => (
-                                <p key={idx} className="tabular-num" style={{ fontSize: 11.5, color: p.color, fontWeight: 600 }}>
-                                  {p.name}: {p.value} min
-                                </p>
-                              ))}
-                            </div>
-                          );
-                        }}
-                      />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <ReferenceLine y={60} stroke="#10B981" strokeDasharray="4 4" label={{ value: '60m Target', position: 'right', fill: '#10B981', fontSize: 10 }} />
-                      <Bar dataKey="paper1Min" name="Paper 1 Actual (min)" fill="#38BDF8" radius={[4, 4, 0, 0]} isAnimationActive={false} />
-                      <Bar dataKey="paper2Min" name="Paper 2 Actual (min)" fill="#F59E0B" radius={[4, 4, 0, 0]} isAnimationActive={false} />
-                    </BarChart>
-                  ) : (
-                    <BarChart
-                      data={subjectTimeComparison.overallBars}
-                      margin={{ left: -12, right: 12, top: 10, bottom: 0 }}
-                    >
-                      <CartesianGrid strokeDasharray="0" stroke="var(--border-subtle)" vertical={false} />
-                      <XAxis dataKey="subject" tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} stroke="transparent" />
-                      <YAxis
-                        domain={[0, 90]}
-                        tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }}
-                        stroke="transparent"
-                        width={36}
-                      />
-                      <Tooltip
-                        content={({ active, payload, label }) => {
-                          if (!active || !payload?.length) return null;
-                          const row = payload[0]?.payload;
-                          return (
-                            <div className="card-glass" style={{ padding: '10px 12px' }}>
-                              <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
-                                {label}
-                              </p>
-                              <p className="tabular-num" style={{ fontSize: 11.5, color: '#0D9488', fontWeight: 700 }}>
-                                Actual Avg: {row.actualMin} min / paper
-                              </p>
-                              <p className="tabular-num" style={{ fontSize: 11.5, color: '#646B78', fontWeight: 600 }}>
-                                Target: {row.targetMin} min / paper
-                              </p>
-                              {row.secPerQ > 0 && (
-                                <p className="tabular-num" style={{ fontSize: 11, color: '#38BDF8', marginTop: 2 }}>
-                                  Avg Question Speed: {row.secPerQ}s / Q
-                                </p>
-                              )}
-                            </div>
-                          );
-                        }}
-                      />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <ReferenceLine y={60} stroke="#F59E0B" strokeDasharray="4 4" />
-                      <Bar dataKey="actualMin" name="Actual Time (min)" fill="#0D9488" radius={[4, 4, 0, 0]} isAnimationActive={false} />
-                      <Bar dataKey="targetMin" name="Target Allocation (60m)" fill="#2B303C" radius={[4, 4, 0, 0]} isAnimationActive={false} />
-                    </BarChart>
-                  )}
+                            )}
+                          </div>
+                        );
+                      }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Bar dataKey="actualMin" name="Actual Time (min)" fill="#0D9488" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+                    <Bar dataKey="targetMin" name="Ideal Time (50m / 40m / 90m)" fill="#F59E0B" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
               <div className="grid grid-cols-3 gap-2 mt-3">
-                {subjectTimeComparison.overallBars.map(b => {
+                {subjectTimeComparison.bars.map(b => {
                   const diff = Number((b.actualMin - b.targetMin).toFixed(1));
                   return (
                     <div
@@ -1250,11 +1114,11 @@ export function TestAnalytics({
                       >
                         {b.actualMin}m{' '}
                         <span style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--text-tertiary)' }}>
-                          ({diff >= 0 ? `+${diff}m` : `${diff}m`})
+                          ({diff >= 0 ? `+${diff}m` : `${diff}m`} vs {b.targetMin}m)
                         </span>
                       </p>
                       <p className="tabular-num" style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
-                        {b.secPerQ > 0 ? `${b.secPerQ}s / question` : '60m target'}
+                        {b.secPerQ > 0 ? `${b.secPerQ}s / Q · Ideal ${b.targetMin}m` : `Ideal ${b.targetMin}m`}
                       </p>
                     </div>
                   );
@@ -1264,7 +1128,7 @@ export function TestAnalytics({
           ) : (
             <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <p style={{ fontSize: 12.5, color: 'var(--text-tertiary)' }}>
-                Log subject timings in a test attempt to compare against 60m targets
+                Log subject timings in a test attempt to compare against ideal times (50m / 40m / 90m)
               </p>
             </div>
           )}

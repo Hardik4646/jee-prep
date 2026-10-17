@@ -30,7 +30,6 @@ import {
   normalizeCanonicalSubject,
   TEST_TYPES,
   PAPER_DURATION_MINUTES,
-  SUBJECT_TARGET_MINUTES_PER_PAPER,
 } from './helpers';
 import { VALID_SUBJECTS, VALID_CATEGORIES, sanitizeText } from '../../utils/security';
 import { format } from 'date-fns';
@@ -440,7 +439,7 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
             {template?.pattern === 'dual'
               ? 'JEE Advanced Unified Event — Tracks Paper 1 (180m) & Paper 2 (180m) independently'
-              : 'JEE Main Single Paper Mode — 180m total (60m target per subject)'}
+              : 'JEE Main Single Paper Mode — 180m total (Ideal: 50m Physics · 40m Chemistry · 90m Maths)'}
           </p>
         </div>
         <button onClick={onCancel} className="btn-ghost" style={{ padding: '7px 9px' }}>
@@ -673,7 +672,7 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
                 <span className="section-label">
                   {template.pattern === 'dual'
                     ? 'JEE Advanced Dual-Paper Timing (Paper 1: 180m + Paper 2: 180m)'
-                    : 'JEE Main 3-Hour Timing Split (Target: 60m Physics · 60m Chemistry · 60m Maths)'}
+                    : 'JEE Main 3-Hour Timing Split (Ideal: 50m Physics · 40m Chemistry · 90m Maths)'}
                 </span>
               </div>
               <span className="text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
@@ -723,12 +722,12 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
 
                     <div className="grid grid-cols-3 gap-3">
                       {([
-                        { key: 'physics' as const, label: 'Physics (Target 60m)' },
-                        { key: 'chemistry' as const, label: 'Chemistry (Target 60m)' },
-                        { key: 'maths' as const, label: 'Mathematics (Target 60m)' },
+                        { key: 'physics' as const, label: 'Physics (Ideal 50m)', ideal: 50 },
+                        { key: 'chemistry' as const, label: 'Chemistry (Ideal 40m)', ideal: 40 },
+                        { key: 'maths' as const, label: 'Mathematics (Ideal 90m)', ideal: 90 },
                       ]).map(sub => {
                         const valNum = parseInt(ptInp[sub.key]) || 0;
-                        const delta = valNum - SUBJECT_TARGET_MINUTES_PER_PAPER;
+                        const delta = valNum - sub.ideal;
                         return (
                           <div key={sub.key}>
                             <div className="flex items-center justify-between mb-1">
@@ -759,7 +758,7 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
                               style={{ padding: '7px 10px', fontSize: 13 }}
                               value={ptInp[sub.key]}
                               onChange={e => updatePaperTime(sub.key, e.target.value)}
-                              placeholder="60"
+                              placeholder={String(sub.ideal)}
                             />
                           </div>
                         );
@@ -775,9 +774,9 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
                 className="grid grid-cols-3 gap-2 mt-3 pt-3 text-xs font-mono"
                 style={{ borderTop: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
               >
-                <div>Combined Physics: {aggregatedTimePhysics}m / 120m</div>
-                <div>Combined Chemistry: {aggregatedTimeChemistry}m / 120m</div>
-                <div>Combined Maths: {aggregatedTimeMaths}m / 120m</div>
+                <div>Combined Physics: {aggregatedTimePhysics}m / 100m</div>
+                <div>Combined Chemistry: {aggregatedTimeChemistry}m / 80m</div>
+                <div>Combined Maths: {aggregatedTimeMaths}m / 180m</div>
               </div>
             )}
 

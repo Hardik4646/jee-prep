@@ -282,9 +282,9 @@ export const SEED_TEMPLATES: ExamTemplate[] = [
     durationPerPaperMinutes: 180,
     papers: [
       [
-        { id: 'jm-phy', name: 'Physics', numQuestions: 25, marksPerCorrect: 4, negativePerWrong: -1, partialMarking: false, targetMinutes: 60 },
-        { id: 'jm-chem', name: 'Chemistry', numQuestions: 25, marksPerCorrect: 4, negativePerWrong: -1, partialMarking: false, targetMinutes: 60 },
-        { id: 'jm-math', name: 'Mathematics', numQuestions: 25, marksPerCorrect: 4, negativePerWrong: -1, partialMarking: false, targetMinutes: 60 },
+        { id: 'jm-phy', name: 'Physics', numQuestions: 25, marksPerCorrect: 4, negativePerWrong: -1, partialMarking: false, targetMinutes: 50 },
+        { id: 'jm-chem', name: 'Chemistry', numQuestions: 25, marksPerCorrect: 4, negativePerWrong: -1, partialMarking: false, targetMinutes: 40 },
+        { id: 'jm-math', name: 'Mathematics', numQuestions: 25, marksPerCorrect: 4, negativePerWrong: -1, partialMarking: false, targetMinutes: 90 },
       ],
     ],
     totalQuestions: 75,
@@ -301,14 +301,14 @@ export const SEED_TEMPLATES: ExamTemplate[] = [
     durationPerPaperMinutes: 180,
     papers: [
       [
-        { id: 'ja-p1-phy', name: 'Physics', numQuestions: 18, marksPerCorrect: 3.33, negativePerWrong: -1, partialMarking: true, targetMinutes: 60 },
-        { id: 'ja-p1-chem', name: 'Chemistry', numQuestions: 18, marksPerCorrect: 3.33, negativePerWrong: -1, partialMarking: true, targetMinutes: 60 },
-        { id: 'ja-p1-math', name: 'Mathematics', numQuestions: 18, marksPerCorrect: 3.33, negativePerWrong: -1, partialMarking: true, targetMinutes: 60 },
+        { id: 'ja-p1-phy', name: 'Physics', numQuestions: 18, marksPerCorrect: 3.33, negativePerWrong: -1, partialMarking: true, targetMinutes: 50 },
+        { id: 'ja-p1-chem', name: 'Chemistry', numQuestions: 18, marksPerCorrect: 3.33, negativePerWrong: -1, partialMarking: true, targetMinutes: 40 },
+        { id: 'ja-p1-math', name: 'Mathematics', numQuestions: 18, marksPerCorrect: 3.33, negativePerWrong: -1, partialMarking: true, targetMinutes: 90 },
       ],
       [
-        { id: 'ja-p2-phy', name: 'Physics', numQuestions: 18, marksPerCorrect: 3.33, negativePerWrong: -1, partialMarking: true, targetMinutes: 60 },
-        { id: 'ja-p2-chem', name: 'Chemistry', numQuestions: 18, marksPerCorrect: 3.33, negativePerWrong: -1, partialMarking: true, targetMinutes: 60 },
-        { id: 'ja-p2-math', name: 'Mathematics', numQuestions: 18, marksPerCorrect: 3.33, negativePerWrong: -1, partialMarking: true, targetMinutes: 60 },
+        { id: 'ja-p2-phy', name: 'Physics', numQuestions: 18, marksPerCorrect: 3.33, negativePerWrong: -1, partialMarking: true, targetMinutes: 50 },
+        { id: 'ja-p2-chem', name: 'Chemistry', numQuestions: 18, marksPerCorrect: 3.33, negativePerWrong: -1, partialMarking: true, targetMinutes: 40 },
+        { id: 'ja-p2-math', name: 'Mathematics', numQuestions: 18, marksPerCorrect: 3.33, negativePerWrong: -1, partialMarking: true, targetMinutes: 90 },
       ],
     ],
     totalQuestions: 108,
@@ -342,9 +342,9 @@ export const SEED_ATTEMPTS: TestAttempt[] = [
     papers: [
       {
         subjects: [
-          { subjectName: 'Physics', correct: 19, incorrect: 3, unattempted: 3, score: 73, maxScore: 100, accuracy: 86.36, marksLostToNegative: 3, timeSpentMinutes: 62, targetMinutes: 60, totalQuestions: 25 },
-          { subjectName: 'Chemistry', correct: 20, incorrect: 4, unattempted: 1, score: 76, maxScore: 100, accuracy: 83.33, marksLostToNegative: 4, timeSpentMinutes: 43, targetMinutes: 60, totalQuestions: 25 },
-          { subjectName: 'Mathematics', correct: 15, incorrect: 3, unattempted: 7, score: 57, maxScore: 100, accuracy: 83.33, marksLostToNegative: 3, timeSpentMinutes: 70, targetMinutes: 60, totalQuestions: 25 },
+          { subjectName: 'Physics', correct: 19, incorrect: 3, unattempted: 3, score: 73, maxScore: 100, accuracy: 86.36, marksLostToNegative: 3, timeSpentMinutes: 62, targetMinutes: 50, totalQuestions: 25 },
+          { subjectName: 'Chemistry', correct: 20, incorrect: 4, unattempted: 1, score: 76, maxScore: 100, accuracy: 83.33, marksLostToNegative: 4, timeSpentMinutes: 43, targetMinutes: 40, totalQuestions: 25 },
+          { subjectName: 'Mathematics', correct: 15, incorrect: 3, unattempted: 7, score: 57, maxScore: 100, accuracy: 83.33, marksLostToNegative: 3, timeSpentMinutes: 70, targetMinutes: 90, totalQuestions: 25 },
         ],
         totalScore: 206,
         maxScore: 300,

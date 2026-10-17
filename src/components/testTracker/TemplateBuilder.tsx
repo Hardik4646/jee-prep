@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Plus, X, Save, FileText, Edit3, Copy, Trash2, Clock, Layers } from 'lucide-react';
 import { ExamTemplate, ExamPattern, TemplateSubject, TestAttempt } from '../../types';
-import { genId, blankSubject, DEFAULT_SUBJECTS, PAPER_DURATION_MINUTES, SUBJECT_TARGET_MINUTES_PER_PAPER } from './helpers';
+import { genId, blankSubject, DEFAULT_SUBJECTS, PAPER_DURATION_MINUTES, getSubjectIdealMinutes } from './helpers';
 import { sanitizeText } from '../../utils/security';
 
 interface TemplateBuilderProps {
@@ -36,7 +36,7 @@ export function TemplateBuilder({ onSave, onCancel, editing }: TemplateBuilderPr
           marksPerCorrect: 4,
           negativePerWrong: -1,
           partialMarking: false,
-          targetMinutes: 60,
+          targetMinutes: getSubjectIdealMinutes(s),
         })),
       ]);
       setMarksPreset([true]);
@@ -52,7 +52,7 @@ export function TemplateBuilder({ onSave, onCancel, editing }: TemplateBuilderPr
           marksPerCorrect: 3.33,
           negativePerWrong: -1,
           partialMarking: true,
-          targetMinutes: 60,
+          targetMinutes: getSubjectIdealMinutes(s),
         }));
       setPapers([makeAdvPaper(), makeAdvPaper()]);
       setMarksPreset([true, true]);

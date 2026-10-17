@@ -22,11 +22,30 @@ export const TEST_TYPES: TestSourceType[] = [
 ];
 
 /**
- * JEE Main: 1 paper × 180 min = 180 min total, 60 min per subject (Physics, Chemistry, Mathematics)
- * JEE Advanced: 2 papers × 180 min = 360 min total, 60 min per subject per paper (120 min combined per subject)
+ * JEE Main: 1 paper × 180 min = 180 min total (Ideal split: 50m Physics, 40m Chemistry, 90m Mathematics)
+ * JEE Advanced: 2 papers × 180 min = 360 min total (Ideal split per paper: 50m Physics, 40m Chemistry, 90m Mathematics)
  */
 export const PAPER_DURATION_MINUTES = 180;
 export const SUBJECT_TARGET_MINUTES_PER_PAPER = 60;
+
+export const SUBJECT_IDEAL_MINUTES_PER_PAPER: Record<'physics' | 'chemistry' | 'maths', number> = {
+  physics: 50,
+  chemistry: 40,
+  maths: 90,
+};
+
+export function normalizeCanonicalSubject(name: string): 'physics' | 'chemistry' | 'maths' | null {
+  const lower = name.toLowerCase();
+  if (lower.includes('phys')) return 'physics';
+  if (lower.includes('chem')) return 'chemistry';
+  if (lower.includes('math')) return 'maths';
+  return null;
+}
+
+export function getSubjectIdealMinutes(name: string): number {
+  const canonical = normalizeCanonicalSubject(name);
+  return canonical ? SUBJECT_IDEAL_MINUTES_PER_PAPER[canonical] : SUBJECT_TARGET_MINUTES_PER_PAPER;
+}
 
 export function blankSubject(name: string, numQuestions = 25): TemplateSubject {
   return {
@@ -36,16 +55,8 @@ export function blankSubject(name: string, numQuestions = 25): TemplateSubject {
     marksPerCorrect: 4,
     negativePerWrong: -1,
     partialMarking: false,
-    targetMinutes: SUBJECT_TARGET_MINUTES_PER_PAPER,
+    targetMinutes: getSubjectIdealMinutes(name),
   };
-}
-
-export function normalizeCanonicalSubject(name: string): 'physics' | 'chemistry' | 'maths' | null {
-  const lower = name.toLowerCase();
-  if (lower.includes('phys')) return 'physics';
-  if (lower.includes('chem')) return 'chemistry';
-  if (lower.includes('math')) return 'maths';
-  return null;
 }
 
 export function subjectMaxScore(s: TemplateSubject, template?: ExamTemplate): number {
@@ -83,7 +94,7 @@ export function computeSubjectScore(
     accuracy,
     marksLostToNegative: Number(marksLost.toFixed(2)),
     timeSpentMinutes: timeSpentMinutes && timeSpentMinutes > 0 ? timeSpentMinutes : undefined,
-    targetMinutes: s.targetMinutes ?? SUBJECT_TARGET_MINUTES_PER_PAPER,
+    targetMinutes: s.targetMinutes ?? getSubjectIdealMinutes(s.name),
     totalQuestions: s.numQuestions,
   };
 }
