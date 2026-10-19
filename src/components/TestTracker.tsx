@@ -17,6 +17,7 @@ interface TestTrackerProps {
   onXP: (amount: number) => void;
   autoOpenLogTest?: boolean;
   onAutoOpenConsumed?: () => void;
+  quickLogTrigger?: number;
 }
 
 type Tab = 'history' | 'analytics' | 'templates';
@@ -31,8 +32,9 @@ export function TestTracker({
   onXP,
   autoOpenLogTest,
   onAutoOpenConsumed,
+  quickLogTrigger,
 }: TestTrackerProps) {
-  const [tab, setTab] = useState<Tab>('history');
+  const [tab, setTab] = useState<Tab>('analytics');
   const [showTemplateBuilder, setShowTemplateBuilder] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<ExamTemplate | null>(null);
   const [showLogTest, setShowLogTest] = useState(false);
@@ -46,6 +48,14 @@ export function TestTracker({
       onAutoOpenConsumed?.();
     }
   }, [autoOpenLogTest, onAutoOpenConsumed]);
+
+  useEffect(() => {
+    if (quickLogTrigger && quickLogTrigger > 0) {
+      setEditingAttempt(null);
+      setShowTemplateBuilder(false);
+      setShowLogTest(true);
+    }
+  }, [quickLogTrigger]);
 
   const handleSaveTemplate = useCallback(
     (tpl: ExamTemplate) => {
@@ -118,7 +128,7 @@ export function TestTracker({
     <div className="space-y-5 animate-slide-up">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="page-title">Test Events & Paper Telemetry</h2>
+          <h2 className="page-title">Test Events & Subject Telemetry</h2>
           <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
             {attempts.length} logged events ({mainCount} JEE Main · {advCount} JEE Advanced) ·{' '}
             {templates.length} exam blueprints
@@ -148,8 +158,15 @@ export function TestTracker({
           >
             <Plus size={14} />
             Log Test Event
-            <span className="kbd-shortcut ml-1" style={{ background: 'rgba(0,0,0,0.25)', color: '#fff', borderColor: 'rgba(255,255,255,0.2)' }}>
-              T
+            <span
+              className="kbd-key ml-1"
+              style={{
+                background: 'rgba(0,0,0,0.25)',
+                color: '#06130E',
+                borderColor: 'rgba(0,0,0,0.2)',
+              }}
+            >
+              ⌘L
             </span>
           </button>
         </div>
@@ -164,11 +181,13 @@ export function TestTracker({
           border: '1px solid var(--border-subtle)',
         }}
       >
-        {([
-          { id: 'history' as const, label: 'Test Event Ledger', icon: ClipboardList },
-          { id: 'analytics' as const, label: 'Timing & Accuracy Analytics', icon: BarChart3 },
-          { id: 'templates' as const, label: 'Exam Blueprints', icon: FileText },
-        ]).map(t => {
+        {(
+          [
+            { id: 'analytics' as const, label: 'Subject & Exam Analytics', icon: BarChart3 },
+            { id: 'history' as const, label: 'Test Event Ledger', icon: ClipboardList },
+            { id: 'templates' as const, label: 'Exam Blueprints', icon: FileText },
+          ] as const
+        ).map(t => {
           const Icon = t.icon;
           return (
             <button
@@ -188,7 +207,7 @@ export function TestTracker({
                 cursor: 'pointer',
                 border: 'none',
                 background: tab === t.id ? 'var(--accent)' : 'transparent',
-                color: tab === t.id ? '#fff' : 'var(--text-tertiary)',
+                color: tab === t.id ? '#06130E' : 'var(--text-tertiary)',
                 transition: 'all 150ms',
               }}
             >
@@ -232,7 +251,16 @@ export function TestTracker({
             />
           )}
           {tab === 'analytics' && (
-            <TestAnalytics attempts={attempts} templates={templates} mistakes={mistakes} />
+            <TestAnalytics
+              attempts={attempts}
+              templates={templates}
+              mistakes={mistakes}
+              onUpdateTemplate={handleSaveTemplate}
+              onEditTemplateInBuilder={t => {
+                setEditingTemplate(t);
+                setShowTemplateBuilder(true);
+              }}
+            />
           )}
           {tab === 'templates' && (
             <TemplateLibrary
