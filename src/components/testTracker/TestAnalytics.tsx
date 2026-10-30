@@ -6,6 +6,7 @@ import {
   Area,
   BarChart,
   Bar,
+  ComposedChart,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -15,6 +16,7 @@ import {
   ReferenceLine,
   Label,
   Legend,
+  Cell,
 } from 'recharts';
 import {
   ClipboardList,
@@ -32,6 +34,11 @@ import {
   Check,
   Edit3,
   Layers,
+  Calendar,
+  GitCompare,
+  Zap,
+  Plus,
+  Minus,
 } from 'lucide-react';
 import {
   ExamTemplate,
@@ -44,9 +51,21 @@ import {
   subjectMaxScore,
   getSubjectIdealMinutes,
   normalizeCanonicalSubject,
+  getSubjectSillyTelemetry,
   TEST_TYPES,
 } from './helpers';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, subDays } from 'date-fns';
+
+export type PeriodWindow = 'last3' | 'last5' | 'last8' | 'days14' | 'days30' | 'all';
+
+const PERIOD_OPTIONS: { id: PeriodWindow; label: string; shortLabel: string }[] = [
+  { id: 'last3', label: 'Last 3 Papers', shortLabel: '3P' },
+  { id: 'last5', label: 'Last 5 Papers', shortLabel: '5P' },
+  { id: 'last8', label: 'Last 8 Papers', shortLabel: '8P' },
+  { id: 'days14', label: 'Last 14 Days', shortLabel: '14D' },
+  { id: 'days30', label: 'Last 30 Days', shortLabel: '30D' },
+  { id: 'all', label: 'All Papers', shortLabel: 'All' },
+];
 
 interface TrendLine {
   key: string;
@@ -129,6 +148,69 @@ function getTemplateSubjectMaxScore(
   return Number((template.totalMaxMarks / 3).toFixed(1));
 }
 
+/**
+ * Compact Period Selector Pill Bar reusable across chart headers
+ */
+function PeriodSelectorBar({
+  value,
+  onChange,
+  shownCount,
+  totalCount,
+}: {
+  value: PeriodWindow;
+  onChange: (v: PeriodWindow) => void;
+  shownCount?: number;
+  totalCount?: number;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      <span className="text-[10.5px] font-mono text-slate-400 flex items-center gap-1 mr-0.5">
+        <Calendar size={11} style={{ color: 'var(--accent)' }} />
+        Window:
+      </span>
+      <div
+        className="flex gap-0.5"
+        style={{
+          background: 'var(--bg-elevated)',
+          borderRadius: 'var(--radius-button)',
+          padding: 2,
+          border: '1px solid var(--border-subtle)',
+        }}
+      >
+        {PERIOD_OPTIONS.map(p => {
+          const active = value === p.id;
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => onChange(p.id)}
+              title={p.label}
+              style={{
+                padding: '4px 8px',
+                borderRadius: 6,
+                fontSize: 11,
+                fontWeight: 600,
+                border: 'none',
+                cursor: 'pointer',
+                background: active ? 'var(--accent)' : 'transparent',
+                color: active ? '#06130E' : 'var(--text-tertiary)',
+                transition: 'all 130ms',
+              }}
+            >
+              {p.label}
+            </button>
+          );
+        })}
+      </div>
+      {shownCount !== undefined && totalCount !== undefined && (
+        <span className="font-mono text-[10.5px] text-slate-400 ml-0.5">
+          ({shownCount}/{totalCount})
+        </span>
+      )}
+    </div>
+  );
+}
+
 const TrendChart = memo(
   ({
     data,
@@ -193,7 +275,7 @@ const TrendChart = memo(
       const attempt = attempts && idx >= 0 ? attempts[idx] : undefined;
 
       return (
-        <div className="card-glass" style={{ padding: '11px 14px', minWidth: 195 }}>
+        <div className="card-glass" style={{ padding: '11px 14px', minWidth: 205 }}>
           <p
             className="font-mono"
             style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginBottom: 3 }}
@@ -233,6 +315,7 @@ const TrendChart = memo(
               const dKey = String(p.dataKey);
               const maxMeta = rowPayload?.[`${dKey}__max`];
               const qMeta = rowPayload?.[`${dKey}__qSplit`];
+              const sillyMeta = rowPayload?.[`${dKey}__silly`];
               return (
                 <div key={i}>
                   <p
@@ -281,6 +364,18 @@ const TrendChart = memo(
                       }}
                     >
                       {qMeta}
+                    </p>
+                  )}
+                  {typeof sillyMeta === 'string' && sillyMeta && (
+                    <p
+                      className="font-mono"
+                      style={{
+                        fontSize: 10,
+                        color: 'var(--warning)',
+                        paddingLeft: 14,
+                      }}
+                    >
+                      {sillyMeta}
                     </p>
                   )}
                 </div>
@@ -415,6 +510,7 @@ const TrendChart = memo(
                   name={l.name}
                   stroke={l.color}
                   strokeWidth={2.5}
+                  strokeDasharray={l.strokeDasharray}
                   fill={`url(#grad-${l.key})`}
                   connectNulls
                   dot={{ r: 3.5, fill: l.color, strokeWidth: 0 }}
@@ -577,7 +673,7 @@ function AttemptDetailPopover({
         className="card"
         onClick={e => e.stopPropagation()}
         style={{
-          maxWidth: 620,
+          maxWidth: 640,
           width: '100%',
           maxHeight: '85vh',
           overflow: 'auto',
@@ -604,10 +700,10 @@ function AttemptDetailPopover({
           </p>
         </div>
 
-        <div className="grid grid-cols-4 gap-2.5" style={{ marginBottom: 16 }}>
+        <div className="grid grid-cols-5 gap-2" style={{ marginBottom: 16 }}>
           {[
             {
-              label: 'Score vs Template Max',
+              label: 'Score vs Max',
               value: `${attempt.totalScore.toFixed(1)}/${template?.totalMaxMarks ?? attempt.maxScore}`,
               color: 'var(--accent)',
             },
@@ -620,6 +716,11 @@ function AttemptDetailPopover({
               label: 'Neg Lost',
               value: `-${attempt.marksLostToNegative.toFixed(1)}`,
               color: 'var(--danger)',
+            },
+            {
+              label: 'Silly Q',
+              value: `${attempt.totalSillyMistakes ?? 0} Q`,
+              color: 'var(--warning)',
             },
             {
               label: 'Total Time',
@@ -639,13 +740,13 @@ function AttemptDetailPopover({
             >
               <p
                 className="tabular-num"
-                style={{ fontSize: 16, fontWeight: 700, color: s.color }}
+                style={{ fontSize: 15, fontWeight: 700, color: s.color }}
               >
                 {s.value}
               </p>
               <p
                 style={{
-                  fontSize: 10.5,
+                  fontSize: 10,
                   color: 'var(--text-tertiary)',
                   marginTop: 2,
                 }}
@@ -717,6 +818,11 @@ function AttemptDetailPopover({
                       <span style={{ color: 'var(--info)' }}>
                         Acc {s.accuracy.toFixed(1)}%
                       </span>
+                      {(s.sillyMistakes ?? 0) > 0 && (
+                        <span style={{ color: 'var(--warning)' }}>
+                          Silly: {s.sillyMistakes} Q (-{s.sillyMarksLost ?? 0}m)
+                        </span>
+                      )}
                       {s.timeSpentMinutes && (
                         <span>
                           Time: {s.timeSpentMinutes}m / {idealMin}m ideal
@@ -736,7 +842,12 @@ function AttemptDetailPopover({
 
 /* ---------- Main TestAnalytics Component ---------- */
 
-type AnalyticsSectionView = 'all' | 'subjectTrends' | 'overallTrajectory' | 'pacingHeatmap';
+type AnalyticsSectionView =
+  | 'all'
+  | 'pastComparison'
+  | 'subjectTrends'
+  | 'overallTrajectory'
+  | 'pacingHeatmap';
 
 type OverallChartMode =
   | 'mainVsAdv'
@@ -751,31 +862,53 @@ type SubjectAspect =
   | 'scorePct'
   | 'accuracy'
   | 'negative'
+  | 'sillyCount'
+  | 'sillyPotential'
   | 'timeSpent'
   | 'attemptRate'
   | 'efficiency';
+
+type ComparisonMode =
+  | 'latestVsPast3'
+  | 'latestVsPast5'
+  | 'recent3VsPrior3'
+  | 'latestVsPrev1'
+  | 'headToHead';
 
 export function TestAnalytics({
   attempts,
   templates,
   mistakes = [],
   onUpdateTemplate,
+  onUpdateAttempt,
   onEditTemplateInBuilder,
 }: {
   attempts: TestAttempt[];
   templates: ExamTemplate[];
   mistakes?: Mistake[];
   onUpdateTemplate?: (updated: ExamTemplate) => void;
+  onUpdateAttempt?: (updated: TestAttempt) => void;
   onEditTemplateInBuilder?: (template: ExamTemplate) => void;
 }) {
-  // Global Filter State
+  // Global Filter & Period Window State
   const [sectionView, setSectionView] = useState<AnalyticsSectionView>('all');
+  const [periodWindow, setPeriodWindow] = useState<PeriodWindow>('last5');
   const [filterTemplate, setFilterTemplate] = useState('all');
   const [filterPattern, setFilterPattern] = useState('all');
   const [filterTestType, setFilterTestType] = useState<'all' | TestSourceType>('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [selectedAttemptIdx, setSelectedAttemptIdx] = useState<number | null>(null);
+
+  // Past-Few-Papers Scored Comparison & Improvement State
+  const [compSubjectFilter, setCompSubjectFilter] = useState<string>('all');
+  const [compMode, setCompMode] = useState<ComparisonMode>('latestVsPast3');
+  const [headToHeadAId, setHeadToHeadAId] = useState<string>('');
+  const [headToHeadBId, setHeadToHeadBId] = useState<string>('');
+
+  // Quick-Ledge Per-Subject Silly Mistakes State
+  const [ledgeAttemptId, setLedgeAttemptId] = useState<string>('');
+  const [savedSillyBanner, setSavedSillyBanner] = useState(false);
 
   // Overall Trajectory Chart Mode
   const [chartMode, setChartMode] = useState<OverallChartMode>('mainVsAdv');
@@ -790,6 +923,7 @@ export function TestAnalytics({
   const [subjectChartStyle, setSubjectChartStyle] = useState<'line' | 'area' | 'bar'>(
     'line'
   );
+  const [showRollingAvg, setShowRollingAvg] = useState(true);
   const [showTemplateMaxEditor, setShowTemplateMaxEditor] = useState(false);
 
   // Inline Template Max Score Editor draft state
@@ -869,8 +1003,8 @@ export function TestAnalytics({
     setTimeout(() => setSavedTemplateBanner(false), 2500);
   };
 
-  // Filtered Attempts (Global)
-  const filtered = useMemo(() => {
+  // Base Filtered Attempts (before Period Window slicing)
+  const baseFiltered = useMemo(() => {
     return attempts
       .filter(a => filterTemplate === 'all' || a.templateId === filterTemplate)
       .filter(a => filterPattern === 'all' || a.pattern === filterPattern)
@@ -880,11 +1014,35 @@ export function TestAnalytics({
       .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt);
   }, [attempts, filterTemplate, filterPattern, filterTestType, dateFrom, dateTo]);
 
-  // Filtered Attempts specifically for the Subject Score Chart (respects subjectChartTemplateId)
-  const subjectFilteredAttempts = useMemo(() => {
-    if (subjectChartTemplateId === 'all') return filtered;
-    return filtered.filter(a => a.templateId === subjectChartTemplateId);
-  }, [filtered, subjectChartTemplateId]);
+  // Apply Period Window Selector so graphs never get cluttered
+  const applyPeriodSlice = (list: TestAttempt[], win: PeriodWindow): TestAttempt[] => {
+    if (win === 'all') return list;
+    if (win === 'last3') return list.slice(-3);
+    if (win === 'last5') return list.slice(-5);
+    if (win === 'last8') return list.slice(-8);
+    const cutoff = format(
+      subDays(new Date(), win === 'days14' ? 14 : 30),
+      'yyyy-MM-dd'
+    );
+    const byDate = list.filter(a => a.date >= cutoff);
+    return byDate.length > 0 ? byDate : list.slice(-5);
+  };
+
+  const filtered = useMemo(
+    () => applyPeriodSlice(baseFiltered, periodWindow),
+    [baseFiltered, periodWindow]
+  );
+
+  // Filtered Attempts specifically for the Subject Score Chart (respects subjectChartTemplateId + periodWindow)
+  const subjectBaseAttempts = useMemo(() => {
+    if (subjectChartTemplateId === 'all') return baseFiltered;
+    return baseFiltered.filter(a => a.templateId === subjectChartTemplateId);
+  }, [baseFiltered, subjectChartTemplateId]);
+
+  const subjectFilteredAttempts = useMemo(
+    () => applyPeriodSlice(subjectBaseAttempts, periodWindow),
+    [subjectBaseAttempts, periodWindow]
+  );
 
   const templateMap = useMemo(() => {
     const map = new Map<string, ExamTemplate>();
@@ -892,6 +1050,34 @@ export function TestAnalytics({
     return map;
   }, [templates]);
 
+  // Discover all subjects across templates and attempts
+  const allSubjectNames = useMemo(() => {
+    const set = new Set<string>(['Physics', 'Chemistry', 'Mathematics']);
+    if (activeSubjectTemplate) {
+      activeSubjectTemplate.papers.forEach(p =>
+        p.forEach(s => set.add(s.name))
+      );
+    }
+    subjectBaseAttempts.forEach(a =>
+      a.papers.forEach(p => p.subjects.forEach(s => set.add(s.subjectName)))
+    );
+    return Array.from(set);
+  }, [activeSubjectTemplate, subjectBaseAttempts]);
+
+  // Compute Template Max Scores per Subject for the active template & paper scope
+  const templateSubjectMaxMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    allSubjectNames.forEach(sn => {
+      map[sn] = getTemplateSubjectMaxScore(
+        activeSubjectTemplate,
+        sn,
+        subjectPaperScope
+      );
+    });
+    return map;
+  }, [allSubjectNames, activeSubjectTemplate, subjectPaperScope]);
+
+  // KPI Summary Stats (for active Period Window)
   const stats = useMemo(() => {
     if (!filtered.length)
       return {
@@ -901,6 +1087,8 @@ export function TestAnalytics({
         avgAcc: 0,
         targetRate: 0,
         totalNegLost: 0,
+        totalSillyQ: 0,
+        totalSillyMarks: 0,
         avgSecPerQ: 0,
       };
     const total = filtered.length;
@@ -908,6 +1096,17 @@ export function TestAnalytics({
     const best = Math.max(...filtered.map(a => a.percentage));
     const avgAcc = filtered.reduce((s, a) => s + a.accuracy, 0) / total;
     const totalNegLost = filtered.reduce((s, a) => s + a.marksLostToNegative, 0);
+
+    let totalSillyQ = 0;
+    let totalSillyMarks = 0;
+    filtered.forEach(a => {
+      allSubjectNames.forEach(sn => {
+        const st = getSubjectSillyTelemetry(a, sn, 'combined', mistakes);
+        totalSillyQ += st.count;
+        totalSillyMarks += st.marksImpact;
+      });
+    });
+
     const withTargets = filtered.filter(a => a.targetAchieved !== undefined);
     const targetRate =
       withTargets.length > 0
@@ -925,35 +1124,365 @@ export function TestAnalytics({
     const avgSecPerQ =
       totalAttemptedQ > 0 ? Math.round(totalSeconds / totalAttemptedQ) : 0;
 
-    return { total, avgPct, best, avgAcc, targetRate, totalNegLost, avgSecPerQ };
-  }, [filtered]);
+    return {
+      total,
+      avgPct,
+      best,
+      avgAcc,
+      targetRate,
+      totalNegLost,
+      totalSillyQ,
+      totalSillyMarks: Number(totalSillyMarks.toFixed(1)),
+      avgSecPerQ,
+    };
+  }, [filtered, allSubjectNames, mistakes]);
 
-  // Discover all subjects across templates and attempts
-  const allSubjectNames = useMemo(() => {
-    const set = new Set<string>(['Physics', 'Chemistry', 'Mathematics']);
-    if (activeSubjectTemplate) {
-      activeSubjectTemplate.papers.forEach(p =>
-        p.forEach(s => set.add(s.name))
-      );
+  /* ============================================================================
+     PAST FEW PAPERS IMPROVEMENT & SCORED COMPARISON ENGINE
+     ============================================================================ */
+  const scoredComparisonSuite = useMemo(() => {
+    const list = baseFiltered;
+    if (list.length === 0) return null;
+
+    // Determine Cohort A (Baseline / Past Papers) and Cohort B (Recent / Target Paper)
+    let cohortA: TestAttempt[] = [];
+    let cohortB: TestAttempt[] = [];
+    let cohortALabel = 'Past Papers Avg';
+    let cohortBLabel = 'Latest Paper';
+
+    const n = list.length;
+    if (compMode === 'headToHead') {
+      const attA = list.find(a => a.id === headToHeadAId) ?? list[Math.max(0, n - 2)];
+      const attB = list.find(a => a.id === headToHeadBId) ?? list[n - 1];
+      cohortA = attA ? [attA] : [];
+      cohortB = attB ? [attB] : [];
+      cohortALabel = attA ? attA.attemptName : 'Baseline Paper';
+      cohortBLabel = attB ? attB.attemptName : 'Target Paper';
+    } else if (compMode === 'latestVsPrev1') {
+      cohortB = [list[n - 1]];
+      cohortA = n >= 2 ? [list[n - 2]] : [list[0]];
+      cohortALabel = n >= 2 ? `Prev (${format(parseISO(list[n - 2].date), 'MMM d')})` : 'Baseline';
+      cohortBLabel = `Latest (${format(parseISO(list[n - 1].date), 'MMM d')})`;
+    } else if (compMode === 'latestVsPast3') {
+      cohortB = [list[n - 1]];
+      cohortA = n >= 2 ? list.slice(Math.max(0, n - 4), n - 1) : [list[0]];
+      cohortALabel = `Past ${cohortA.length} Paper${cohortA.length > 1 ? 's' : ''} Avg`;
+      cohortBLabel = `Latest (${format(parseISO(list[n - 1].date), 'MMM d')})`;
+    } else if (compMode === 'latestVsPast5') {
+      cohortB = [list[n - 1]];
+      cohortA = n >= 2 ? list.slice(Math.max(0, n - 6), n - 1) : [list[0]];
+      cohortALabel = `Past ${cohortA.length} Paper${cohortA.length > 1 ? 's' : ''} Avg`;
+      cohortBLabel = `Latest (${format(parseISO(list[n - 1].date), 'MMM d')})`;
+    } else {
+      // recent3VsPrior3
+      const half = Math.min(3, Math.max(1, Math.floor(n / 2)));
+      cohortB = list.slice(-half);
+      cohortA = n > half ? list.slice(Math.max(0, n - half * 2), n - half) : [list[0]];
+      cohortALabel = `Prior ${cohortA.length} Paper${cohortA.length > 1 ? 's' : ''} Avg`;
+      cohortBLabel = `Recent ${cohortB.length} Paper${cohortB.length > 1 ? 's' : ''} Avg`;
     }
-    subjectFilteredAttempts.forEach(a =>
-      a.papers.forEach(p => p.subjects.forEach(s => set.add(s.subjectName)))
-    );
-    return Array.from(set);
-  }, [activeSubjectTemplate, subjectFilteredAttempts]);
 
-  // Compute Template Max Scores per Subject for the active template & paper scope
-  const templateSubjectMaxMap = useMemo(() => {
-    const map: Record<string, number> = {};
-    allSubjectNames.forEach(sn => {
-      map[sn] = getTemplateSubjectMaxScore(
-        activeSubjectTemplate,
-        sn,
-        subjectPaperScope
+    // Helper to extract subject score & silly marks for an attempt
+    const extractAttemptSubjMetrics = (a: TestAttempt, subjFilter: string) => {
+      const tpl = templateMap.get(a.templateId) ?? activeSubjectTemplate;
+      if (subjFilter === 'all') {
+        let sillyCount = 0;
+        let sillyMarks = 0;
+        allSubjectNames.forEach(sn => {
+          const st = getSubjectSillyTelemetry(a, sn, subjectPaperScope, mistakes);
+          sillyCount += st.count;
+          sillyMarks += st.marksImpact;
+        });
+        const maxScore = tpl?.totalMaxMarks ?? a.maxScore;
+        const rawScore = a.totalScore;
+        const pct = maxScore > 0 ? (rawScore / maxScore) * 100 : a.percentage;
+        const potentialScore = Math.min(maxScore, Number((rawScore + sillyMarks).toFixed(1)));
+        const potentialPct = maxScore > 0 ? (potentialScore / maxScore) * 100 : pct;
+        return {
+          score: rawScore,
+          maxScore,
+          pct: Number(pct.toFixed(1)),
+          accuracy: a.accuracy,
+          negative: a.marksLostToNegative,
+          sillyCount,
+          sillyMarks: Number(sillyMarks.toFixed(1)),
+          potentialScore,
+          potentialPct: Number(potentialPct.toFixed(1)),
+        };
+      }
+
+      const canon = normalizeCanonicalSubject(subjFilter);
+      const papersToRead =
+        subjectPaperScope === 'paper1'
+          ? [a.papers[0]].filter(Boolean)
+          : subjectPaperScope === 'paper2'
+          ? [a.papers[1]].filter(Boolean)
+          : a.papers;
+
+      const matching = papersToRead
+        .flatMap(p => p?.subjects ?? [])
+        .filter(
+          s =>
+            s.subjectName === subjFilter ||
+            (canon && normalizeCanonicalSubject(s.subjectName) === canon)
+        );
+
+      const score = Number(matching.reduce((s, x) => s + x.score, 0).toFixed(1));
+      const maxScore =
+        getTemplateSubjectMaxScore(
+          tpl,
+          subjFilter,
+          a.pattern === 'single' ? 'paper1' : subjectPaperScope
+        ) || 100;
+      const c = matching.reduce((s, x) => s + x.correct, 0);
+      const w = matching.reduce((s, x) => s + x.incorrect, 0);
+      const accuracy = c + w > 0 ? Number(((c / (c + w)) * 100).toFixed(1)) : 0;
+      const negative = Number(
+        matching.reduce((s, x) => s + (x.marksLostToNegative ?? x.incorrect), 0).toFixed(1)
       );
+      const st = getSubjectSillyTelemetry(a, subjFilter, subjectPaperScope, mistakes);
+      const potentialScore = Math.min(maxScore, Number((score + st.marksImpact).toFixed(1)));
+      return {
+        score,
+        maxScore,
+        pct: maxScore > 0 ? Number(((score / maxScore) * 100).toFixed(1)) : 0,
+        accuracy,
+        negative,
+        sillyCount: st.count,
+        sillyMarks: st.marksImpact,
+        potentialScore,
+        potentialPct:
+          maxScore > 0 ? Number(((potentialScore / maxScore) * 100).toFixed(1)) : 0,
+      };
+    };
+
+    const avgCohort = (cohort: TestAttempt[], subjFilter: string) => {
+      if (!cohort.length)
+        return {
+          score: 0,
+          maxScore: 100,
+          pct: 0,
+          accuracy: 0,
+          negative: 0,
+          sillyCount: 0,
+          sillyMarks: 0,
+          potentialScore: 0,
+          potentialPct: 0,
+        };
+      const items = cohort.map(a => extractAttemptSubjMetrics(a, subjFilter));
+      const k = items.length;
+      return {
+        score: Number((items.reduce((s, x) => s + x.score, 0) / k).toFixed(1)),
+        maxScore: Number((items.reduce((s, x) => s + x.maxScore, 0) / k).toFixed(1)),
+        pct: Number((items.reduce((s, x) => s + x.pct, 0) / k).toFixed(1)),
+        accuracy: Number((items.reduce((s, x) => s + x.accuracy, 0) / k).toFixed(1)),
+        negative: Number((items.reduce((s, x) => s + x.negative, 0) / k).toFixed(1)),
+        sillyCount: Number((items.reduce((s, x) => s + x.sillyCount, 0) / k).toFixed(1)),
+        sillyMarks: Number((items.reduce((s, x) => s + x.sillyMarks, 0) / k).toFixed(1)),
+        potentialScore: Number(
+          (items.reduce((s, x) => s + x.potentialScore, 0) / k).toFixed(1)
+        ),
+        potentialPct: Number(
+          (items.reduce((s, x) => s + x.potentialPct, 0) / k).toFixed(1)
+        ),
+      };
+    };
+
+    // 1. Subject-by-Subject Scored Comparison Bars (Physics, Chemistry, Mathematics)
+    const subjectComparisonBars = allSubjectNames.map(sn => {
+      const baseM = avgCohort(cohortA, sn);
+      const recentM = avgCohort(cohortB, sn);
+      const scoreDelta = Number((recentM.score - baseM.score).toFixed(1));
+      const pctDelta = Number((recentM.pct - baseM.pct).toFixed(1));
+      return {
+        subject: sn,
+        baselineScore: baseM.score,
+        recentScore: recentM.score,
+        sillyFreePotential: recentM.potentialScore,
+        templateMax: templateSubjectMaxMap[sn] ?? recentM.maxScore,
+        baselineAcc: baseM.accuracy,
+        recentAcc: recentM.accuracy,
+        sillyCount: recentM.sillyCount,
+        sillyMarks: recentM.sillyMarks,
+        scoreDelta,
+        pctDelta,
+      };
     });
-    return map;
-  }, [allSubjectNames, activeSubjectTemplate, subjectPaperScope]);
+
+    // 2. Paper-by-Paper Improvement Delta & Rolling 3-Paper Moving Average (for active Period Window)
+    const periodPoints = filtered.map((a, idx) => {
+      const fullIdx = list.findIndex(x => x.id === a.id);
+      const cur = extractAttemptSubjMetrics(a, compSubjectFilter);
+      const prevAttempt = fullIdx > 0 ? list[fullIdx - 1] : null;
+      const prev = prevAttempt ? extractAttemptSubjMetrics(prevAttempt, compSubjectFilter) : null;
+      const deltaMarks = prev ? Number((cur.score - prev.score).toFixed(1)) : 0;
+      const deltaPct = prev ? Number((cur.pct - prev.pct).toFixed(1)) : 0;
+
+      // 3-paper rolling average up to fullIdx
+      const rollSlice = list.slice(Math.max(0, fullIdx - 2), fullIdx + 1);
+      const rollMetrics = avgCohort(rollSlice, compSubjectFilter);
+
+      // Per-subject silly counts for the stacked silly bar chart
+      const phySilly = getSubjectSillyTelemetry(a, 'Physics', subjectPaperScope, mistakes);
+      const chemSilly = getSubjectSillyTelemetry(a, 'Chemistry', subjectPaperScope, mistakes);
+      const mathSilly = getSubjectSillyTelemetry(a, 'Mathematics', subjectPaperScope, mistakes);
+
+      return {
+        index: idx,
+        attemptId: a.id,
+        label: format(parseISO(a.date), 'MMM d'),
+        attemptName: a.attemptName,
+        score: cur.score,
+        maxScore: cur.maxScore,
+        pct: cur.pct,
+        rollingAvgScore: rollMetrics.score,
+        rollingAvgPct: rollMetrics.pct,
+        potentialScore: cur.potentialScore,
+        deltaMarks,
+        deltaPct,
+        accuracy: cur.accuracy,
+        negative: cur.negative,
+        sillyCount: cur.sillyCount,
+        sillyMarks: cur.sillyMarks,
+        sillyPhysics: phySilly.count,
+        sillyChemistry: chemSilly.count,
+        sillyMaths: mathSilly.count,
+      };
+    });
+
+    const summaryBase = avgCohort(cohortA, compSubjectFilter);
+    const summaryRecent = avgCohort(cohortB, compSubjectFilter);
+
+    return {
+      cohortALabel,
+      cohortBLabel,
+      summaryBase,
+      summaryRecent,
+      scoreDelta: Number((summaryRecent.score - summaryBase.score).toFixed(1)),
+      pctDelta: Number((summaryRecent.pct - summaryBase.pct).toFixed(1)),
+      accDelta: Number((summaryRecent.accuracy - summaryBase.accuracy).toFixed(1)),
+      sillyDelta: Number((summaryRecent.sillyCount - summaryBase.sillyCount).toFixed(1)),
+      subjectComparisonBars,
+      periodPoints,
+    };
+  }, [
+    baseFiltered,
+    filtered,
+    compMode,
+    headToHeadAId,
+    headToHeadBId,
+    compSubjectFilter,
+    allSubjectNames,
+    templateMap,
+    activeSubjectTemplate,
+    subjectPaperScope,
+    mistakes,
+    templateSubjectMaxMap,
+  ]);
+
+  // Quick-Ledge Per-Subject Silly Mistakes Handler
+  const targetLedgeAttempt = useMemo(() => {
+    if (ledgeAttemptId) {
+      const found = attempts.find(a => a.id === ledgeAttemptId);
+      if (found) return found;
+    }
+    return filtered[filtered.length - 1] ?? attempts[0] ?? null;
+  }, [ledgeAttemptId, attempts, filtered]);
+
+  const handleAdjustSubjectSillyCount = (
+    attempt: TestAttempt,
+    subjectName: string,
+    deltaOrExact: number,
+    isExact = false
+  ) => {
+    if (!onUpdateAttempt) return;
+    const canon = normalizeCanonicalSubject(subjectName);
+    const tpl = templateMap.get(attempt.templateId);
+
+    const updatedPapers = attempt.papers.map((paper, pi) => {
+      // Update first paper (or matching paper) subject silly count
+      const updatedSubjects = paper.subjects.map(s => {
+        const sCanon = normalizeCanonicalSubject(s.name);
+        if (s.subjectName === subjectName || (canon && sCanon === canon)) {
+          // If dual paper and user clicks +1 on combined, apply to Paper 1 unless Paper 2 is scoped
+          if (
+            attempt.papers.length > 1 &&
+            ((subjectPaperScope === 'paper2' && pi !== 1) ||
+              (subjectPaperScope !== 'paper2' && pi !== 0))
+          ) {
+            return s;
+          }
+          const currentSilly = s.sillyMistakes ?? 0;
+          const nextSilly = Math.max(
+            0,
+            isExact ? deltaOrExact : currentSilly + deltaOrExact
+          );
+          const tplSubj = tpl?.papers[pi]?.find(
+            ts =>
+              ts.name === s.subjectName ||
+              (canon && normalizeCanonicalSubject(ts.name) === canon)
+          );
+          const swing = tplSubj
+            ? tplSubj.marksPerCorrect +
+              (tplSubj.negativePerWrong < 0 ? Math.abs(tplSubj.negativePerWrong) : 0)
+            : attempt.pattern === 'dual'
+            ? 4.33
+            : 5;
+          return {
+            ...s,
+            sillyMistakes: nextSilly,
+            sillyMarksLost: Number((nextSilly * swing).toFixed(1)),
+          };
+        }
+        return s;
+      });
+
+      const totalSillyMistakes = updatedSubjects.reduce(
+        (sum, x) => sum + (x.sillyMistakes ?? 0),
+        0
+      );
+      const sillyMarksLost = Number(
+        updatedSubjects
+          .reduce((sum, x) => sum + (x.sillyMarksLost ?? 0), 0)
+          .toFixed(1)
+      );
+      return {
+        ...paper,
+        subjects: updatedSubjects,
+        totalSillyMistakes,
+        sillyMarksLost,
+      };
+    });
+
+    const totalSillyMistakes = updatedPapers.reduce(
+      (sum, p) => sum + (p.totalSillyMistakes ?? 0),
+      0
+    );
+    const sillyMarksLost = Number(
+      updatedPapers.reduce((sum, p) => sum + (p.sillyMarksLost ?? 0), 0).toFixed(1)
+    );
+    const sumByCanon = (c: 'physics' | 'chemistry' | 'maths') =>
+      updatedPapers.reduce(
+        (sum, p) =>
+          sum +
+          p.subjects
+            .filter(s => normalizeCanonicalSubject(s.subjectName) === c)
+            .reduce((a, b) => a + (b.sillyMistakes ?? 0), 0),
+        0
+      );
+
+    onUpdateAttempt({
+      ...attempt,
+      papers: updatedPapers,
+      totalSillyMistakes,
+      sillyMarksLost,
+      sillyPhysics: sumByCanon('physics'),
+      sillyChemistry: sumByCanon('chemistry'),
+      sillyMaths: sumByCanon('maths'),
+    });
+    setSavedSillyBanner(true);
+    setTimeout(() => setSavedSillyBanner(false), 1800);
+  };
 
   // Multi-Aspect Subject-Wise Trend Data & Lines
   const subjectMultiAspectTrend = useMemo(() => {
@@ -1016,6 +1545,7 @@ export function TestAnalytics({
           (sum, s) => sum + (s.marksLostToNegative ?? s.incorrect),
           0
         );
+        const sillyInfo = getSubjectSillyTelemetry(a, sn, subjectPaperScope, mistakes);
 
         // Subject time spent
         let timeMin = matchingScores.reduce(
@@ -1034,6 +1564,9 @@ export function TestAnalytics({
 
         row[`${sn}__max`] = effectiveMax;
         row[`${sn}__qSplit`] = `✓${totalC} · ✗${totalI} · —${totalU} (${attempted}/${totalQ} Q)`;
+        if (sillyInfo.count > 0) {
+          row[`${sn}__silly`] = `Silly: ${sillyInfo.count} Q (-${sillyInfo.marksImpact}m recoverable)`;
+        }
 
         if (subjectAspect === 'score') {
           row[sn] = Number(rawScore.toFixed(1));
@@ -1043,6 +1576,14 @@ export function TestAnalytics({
           row[sn] = Number(acc.toFixed(1));
         } else if (subjectAspect === 'negative') {
           row[sn] = Number(negLost.toFixed(1));
+        } else if (subjectAspect === 'sillyCount') {
+          row[sn] = sillyInfo.count;
+        } else if (subjectAspect === 'sillyPotential') {
+          row[sn] = Math.min(
+            effectiveMax,
+            Number((rawScore + sillyInfo.marksImpact).toFixed(1))
+          );
+          row[`${sn}__actual`] = Number(rawScore.toFixed(1));
         } else if (subjectAspect === 'timeSpent') {
           row[sn] = timeMin > 0 ? Number(timeMin.toFixed(1)) : null;
         } else if (subjectAspect === 'attemptRate') {
@@ -1056,18 +1597,59 @@ export function TestAnalytics({
       return row;
     });
 
+    // Add 3-Paper Rolling Moving Average when isolating a single subject or when enabled
+    if (showRollingAvg && selectedSubjectFilter !== 'all' && data.length >= 2) {
+      const sn = selectedSubjectFilter;
+      data.forEach((d, idx) => {
+        const win = data
+          .slice(Math.max(0, idx - 2), idx + 1)
+          .map(x => x[sn])
+          .filter((v): v is number => typeof v === 'number');
+        if (win.length > 0) {
+          d[`${sn}__roll`] = Number(
+            (win.reduce((a, b) => a + b, 0) / win.length).toFixed(1)
+          );
+        }
+      });
+    }
+
     const lines: TrendLine[] = activeSubjects.map((sn, idx) => ({
       key: sn,
       name:
         subjectAspect === 'score'
           ? `${sn} (Max ${templateSubjectMaxMap[sn] ?? 100}m)`
+          : subjectAspect === 'sillyPotential'
+          ? `${sn} Silly-Free Potential`
           : sn,
       color: getSubjectColor(sn, idx),
     }));
 
-    // Build Reference Ceilings when viewing Raw Marks or Time Spent
+    if (subjectAspect === 'sillyPotential') {
+      activeSubjects.forEach((sn, idx) => {
+        lines.push({
+          key: `${sn}__actual`,
+          name: `${sn} Actual Score`,
+          color: getSubjectColor(sn, idx),
+          strokeDasharray: '4 4',
+        });
+      });
+    }
+
+    if (showRollingAvg && selectedSubjectFilter !== 'all' && data.length >= 2) {
+      lines.push({
+        key: `${selectedSubjectFilter}__roll`,
+        name: `${selectedSubjectFilter} 3-Paper Rolling Avg`,
+        color: '#A855F7',
+        strokeDasharray: '5 3',
+      });
+    }
+
+    // Build Reference Ceilings when viewing Raw Marks, Silly Potential, or Time Spent
     const ceilings: ReferenceCeiling[] = [];
-    if (subjectAspect === 'score' && activeSubjectTemplate) {
+    if (
+      (subjectAspect === 'score' || subjectAspect === 'sillyPotential') &&
+      activeSubjectTemplate
+    ) {
       if (selectedSubjectFilter !== 'all') {
         const mx = templateSubjectMaxMap[selectedSubjectFilter];
         if (mx) {
@@ -1078,7 +1660,6 @@ export function TestAnalytics({
           });
         }
       } else {
-        // Deduplicate max scores if all subjects share the same max (e.g. 100m in JEE Main)
         const uniqueMaxes = Array.from(
           new Set(activeSubjects.map(s => templateSubjectMaxMap[s]))
         ).filter(Boolean);
@@ -1137,6 +1718,8 @@ export function TestAnalytics({
     subjectPaperScope,
     subjectAspect,
     templateSubjectMaxMap,
+    mistakes,
+    showRollingAvg,
   ]);
 
   // Separate Individual Subject Score Cards (Physics, Chemistry, Mathematics)
@@ -1152,10 +1735,13 @@ export function TestAnalytics({
         label: string;
         attemptName: string;
         score: number;
+        potentialScore: number;
         maxScore: number;
         scorePct: number;
         accuracy: number;
         negative: number;
+        sillyCount: number;
+        sillyMarks: number;
         attemptRate: number;
         timeMin: number;
       }> = [];
@@ -1206,6 +1792,11 @@ export function TestAnalytics({
             .toFixed(1)
         );
         const attemptRate = Number(((att / totQ) * 100).toFixed(1));
+        const sillyInfo = getSubjectSillyTelemetry(a, sn, subjectPaperScope, mistakes);
+        const potentialScore = Math.min(
+          maxScore,
+          Number((score + sillyInfo.marksImpact).toFixed(1))
+        );
 
         let timeMin = matching.reduce(
           (sum, s) => sum + (s.timeSpentMinutes ?? 0),
@@ -1216,7 +1807,6 @@ export function TestAnalytics({
           else if (canon === 'chemistry') timeMin = a.timeChemistry ?? 0;
           else if (canon === 'maths') timeMin = a.timeMaths ?? 0;
         }
-        // Normalize per paper for comparison against 50m/40m/90m ideal
         const normPaperTime =
           timeMin > 0
             ? Number(
@@ -1234,10 +1824,13 @@ export function TestAnalytics({
           label: format(parseISO(a.date), 'MMM d'),
           attemptName: a.attemptName,
           score,
+          potentialScore,
           maxScore,
           scorePct: maxScore > 0 ? Number(((score / maxScore) * 100).toFixed(1)) : 0,
           accuracy,
           negative,
+          sillyCount: sillyInfo.count,
+          sillyMarks: sillyInfo.marksImpact,
           attemptRate,
           timeMin: normPaperTime,
         });
@@ -1253,6 +1846,8 @@ export function TestAnalytics({
       const avgAttemptRate =
         count > 0 ? points.reduce((s, p) => s + p.attemptRate, 0) / count : 0;
       const totalNeg = points.reduce((s, p) => s + p.negative, 0);
+      const totalSillyQ = points.reduce((s, p) => s + p.sillyCount, 0);
+      const totalSillyMarks = points.reduce((s, p) => s + p.sillyMarks, 0);
       const timedPts = points.filter(p => p.timeMin > 0);
       const avgTimeMin =
         timedPts.length > 0
@@ -1274,6 +1869,8 @@ export function TestAnalytics({
         avgAcc: Number(avgAcc.toFixed(1)),
         avgAttemptRate: Number(avgAttemptRate.toFixed(1)),
         totalNeg: Number(totalNeg.toFixed(1)),
+        totalSillyQ,
+        totalSillyMarks: Number(totalSillyMarks.toFixed(1)),
         avgTimeMin: Number(avgTimeMin.toFixed(1)),
         delta,
       };
@@ -1285,6 +1882,7 @@ export function TestAnalytics({
     templateMap,
     activeSubjectTemplate,
     subjectPaperScope,
+    mistakes,
   ]);
 
   // 1. Accuracy & Score Trends over time for JEE Main vs. JEE Advanced
@@ -1590,6 +2188,18 @@ export function TestAnalytics({
       desc: 'Raw marks obtained per subject plotted against the exact Subject Max Score fetched from your Exam Template.',
     },
     {
+      id: 'sillyPotential',
+      label: 'Silly-Free Potential',
+      yLabel: 'Marks',
+      desc: 'Compares your actual subject score (dashed) against the score you would have achieved with zero silly mistakes (solid).',
+    },
+    {
+      id: 'sillyCount',
+      label: 'Silly Mistakes (Q)',
+      yLabel: 'Silly Qs',
+      desc: 'Tracks the number of careless/silly errors logged per subject across the selected paper period.',
+    },
+    {
       id: 'scorePct',
       label: '% of Subject Max',
       yLabel: '% of Max',
@@ -1663,15 +2273,15 @@ export function TestAnalytics({
 
   return (
     <div className="space-y-6">
-      {/* Top Global Filter & Workspace Section Bar */}
+      {/* Top Global Filter, Period Window & Workspace Section Bar */}
       <div className="card" style={{ padding: '16px 20px' }}>
         <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 mb-3.5 border-b border-slate-800/80">
           <div>
-            <p className="text-[13px] font-bold text-slate-100">
-              Analytics Workspace View
+            <p className="text-[13.5px] font-bold text-slate-100">
+              Analytics Workspace & Period Control
             </p>
             <p className="text-[11px] text-slate-400">
-              Switch between focused analytical suites or view all modules in a spacious layout
+              Slice charts by paper window to prevent clutter and compare recent performance vs. past papers
             </p>
           </div>
           <div
@@ -1685,9 +2295,10 @@ export function TestAnalytics({
           >
             {(
               [
-                { id: 'all' as const, label: 'All Sections (Spacious)' },
+                { id: 'all' as const, label: 'All Suites' },
+                { id: 'pastComparison' as const, label: 'Past Papers & Silly Ledger' },
                 { id: 'subjectTrends' as const, label: 'Subject Score & Aspect Trends' },
-                { id: 'overallTrajectory' as const, label: 'Overall & Mode Trajectory' },
+                { id: 'overallTrajectory' as const, label: 'Overall Trajectory' },
                 { id: 'pacingHeatmap' as const, label: 'Pacing & Topic Heatmap' },
               ] as const
             ).map(sec => (
@@ -1696,7 +2307,7 @@ export function TestAnalytics({
                 type="button"
                 onClick={() => setSectionView(sec.id)}
                 style={{
-                  padding: '6px 12px',
+                  padding: '6px 11px',
                   borderRadius: 6,
                   fontSize: 11.5,
                   fontWeight: 600,
@@ -1715,71 +2326,82 @@ export function TestAnalytics({
           </div>
         </div>
 
-        {/* Global Filters Row */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <select
-            value={filterTemplate}
-            onChange={e => {
-              setFilterTemplate(e.target.value);
-              setSubjectChartTemplateId(e.target.value);
-            }}
-            className="field"
-            style={{ width: 'auto', padding: '6px 11px', fontSize: 12 }}
-          >
-            <option value="all">All Exam Templates</option>
-            {templates.map(t => (
-              <option key={t.id} value={t.id}>
-                {t.name} ({t.totalMaxMarks}M)
-              </option>
-            ))}
-          </select>
+        {/* Global Filters + Period Selector Row */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <PeriodSelectorBar
+            value={periodWindow}
+            onChange={setPeriodWindow}
+            shownCount={filtered.length}
+            totalCount={baseFiltered.length}
+          />
 
-          <select
-            value={filterPattern}
-            onChange={e => setFilterPattern(e.target.value)}
-            className="field"
-            style={{ width: 'auto', padding: '6px 11px', fontSize: 12 }}
-          >
-            <option value="all">All Modes (Main + Advanced)</option>
-            <option value="single">JEE Main (Single 3-Hr)</option>
-            <option value="dual">JEE Advanced (Dual 2×3-Hr)</option>
-          </select>
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={filterTemplate}
+              onChange={e => {
+                setFilterTemplate(e.target.value);
+                setSubjectChartTemplateId(e.target.value);
+              }}
+              className="field"
+              style={{ width: 'auto', padding: '6px 10px', fontSize: 11.5 }}
+            >
+              <option value="all">All Exam Templates</option>
+              {templates.map(t => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({t.totalMaxMarks}M)
+                </option>
+              ))}
+            </select>
 
-          <select
-            value={filterTestType}
-            onChange={e =>
-              setFilterTestType(e.target.value as 'all' | TestSourceType)
-            }
-            className="field"
-            style={{ width: 'auto', padding: '6px 11px', fontSize: 12 }}
-          >
-            <option value="all">All Test Sources</option>
-            {TEST_TYPES.map(tt => (
-              <option key={tt} value={tt}>
-                {tt}
-              </option>
-            ))}
-          </select>
+            <select
+              value={filterPattern}
+              onChange={e => setFilterPattern(e.target.value)}
+              className="field"
+              style={{ width: 'auto', padding: '6px 10px', fontSize: 11.5 }}
+            >
+              <option value="all">All Modes (Main + Adv)</option>
+              <option value="single">JEE Main (Single 3-Hr)</option>
+              <option value="dual">JEE Advanced (Dual 2×3-Hr)</option>
+            </select>
 
-          <div className="flex items-center gap-1.5 ml-auto">
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={e => setDateFrom(e.target.value)}
-              className="field tabular-num"
-              style={{ width: 'auto', padding: '6px 10px', fontSize: 12 }}
-            />
-            <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>→</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={e => setDateTo(e.target.value)}
-              className="field tabular-num"
-              style={{ width: 'auto', padding: '6px 10px', fontSize: 12 }}
-            />
+            <select
+              value={filterTestType}
+              onChange={e =>
+                setFilterTestType(e.target.value as 'all' | TestSourceType)
+              }
+              className="field"
+              style={{ width: 'auto', padding: '6px 10px', fontSize: 11.5 }}
+            >
+              <option value="all">All Sources</option>
+              {TEST_TYPES.map(tt => (
+                <option key={tt} value={tt}>
+                  {tt}
+                </option>
+              ))}
+            </select>
+
+            <div className="flex items-center gap-1">
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={e => setDateFrom(e.target.value)}
+                className="field tabular-num"
+                style={{ width: 'auto', padding: '5px 8px', fontSize: 11.5 }}
+              />
+              <span style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>→</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={e => setDateTo(e.target.value)}
+                className="field tabular-num"
+                style={{ width: 'auto', padding: '5px 8px', fontSize: 11.5 }}
+              />
+            </div>
+
             {(filterTemplate !== 'all' ||
               filterPattern !== 'all' ||
               filterTestType !== 'all' ||
+              periodWindow !== 'last5' ||
               dateFrom ||
               dateTo) && (
               <button
@@ -1789,10 +2411,11 @@ export function TestAnalytics({
                   setSubjectChartTemplateId('all');
                   setFilterPattern('all');
                   setFilterTestType('all');
+                  setPeriodWindow('last5');
                   setDateFrom('');
                   setDateTo('');
                 }}
-                className="btn-ghost !py-1.5 !px-2.5 text-[11.5px]"
+                className="btn-ghost !py-1.5 !px-2.5 text-[11px]"
               >
                 Reset
               </button>
@@ -1801,12 +2424,12 @@ export function TestAnalytics({
         </div>
       </div>
 
-      {/* KPI Summary Strip */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5">
+      {/* KPI Summary Strip (Period-Scoped) */}
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         {[
           {
-            label: 'Test Events',
-            value: stats.total,
+            label: 'Period Papers',
+            value: `${stats.total}/${baseFiltered.length}`,
             sub: `${filtered.filter(a => a.pattern === 'single').length} Main · ${filtered.filter(a => a.pattern === 'dual').length} Adv`,
             color: 'var(--accent)',
             icon: ClipboardList,
@@ -1833,37 +2456,44 @@ export function TestAnalytics({
             icon: AlertTriangle,
           },
           {
+            label: 'Silly Mistakes',
+            value: `${stats.totalSillyQ} Q`,
+            sub: `-${stats.totalSillyMarks}m recoverable`,
+            color: 'var(--warning)',
+            icon: Zap,
+          },
+          {
             label: 'Avg Pace / Q',
             value: stats.avgSecPerQ > 0 ? `${stats.avgSecPerQ}s` : '—',
-            sub: 'Per attempted question',
-            color: 'var(--warning)',
+            sub: 'Per attempted Q',
+            color: '#A855F7',
             icon: Clock,
           },
         ].map(k => {
           const Icon = k.icon;
           return (
-            <div key={k.label} className="card" style={{ padding: 18 }}>
-              <div className="flex items-center justify-between mb-2">
+            <div key={k.label} className="card" style={{ padding: 16 }}>
+              <div className="flex items-center justify-between mb-1.5">
                 <span
                   style={{
-                    fontSize: 11.5,
+                    fontSize: 11,
                     fontWeight: 600,
                     color: 'var(--text-secondary)',
                   }}
                 >
                   {k.label}
                 </span>
-                <Icon size={15} style={{ color: k.color }} />
+                <Icon size={14} style={{ color: k.color }} />
               </div>
-              <div className="stat-number" style={{ fontSize: 24 }}>
+              <div className="stat-number" style={{ fontSize: 22 }}>
                 {k.value}
               </div>
               <div
                 className="tabular-num"
                 style={{
-                  fontSize: 11,
+                  fontSize: 10.5,
                   color: 'var(--text-tertiary)',
-                  marginTop: 4,
+                  marginTop: 3,
                 }}
               >
                 {k.sub}
@@ -1874,7 +2504,880 @@ export function TestAnalytics({
       </div>
 
       {/* =====================================================================
-          SECTION 1: SUBJECT-WISE SCORE & MULTI-ASPECT TRENDS SUITE (NEW)
+          SECTION 0: PAST PAPERS IMPROVEMENT, SCORED COMPARISONS & SILLY LEDGER
+         ===================================================================== */}
+      {(sectionView === 'all' || sectionView === 'pastComparison') &&
+        scoredComparisonSuite && (
+          <div className="space-y-5">
+            {/* Scored Comparison & Improvement Header Card */}
+            <div className="card" style={{ padding: 24 }}>
+              <div className="flex flex-wrap items-start justify-between gap-4 pb-4 mb-4 border-b border-slate-800/80">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <GitCompare size={16} style={{ color: 'var(--accent)' }} />
+                    <h3 className="card-title text-[16px]">
+                      Past Papers Improvement & Scored Comparison Suite
+                    </h3>
+                  </div>
+                  <p className="text-[12px] text-slate-400 mt-1">
+                    Compare recent papers against your past paper baseline with subject filters, rolling score deltas, and silly-free potential
+                  </p>
+                </div>
+
+                <PeriodSelectorBar
+                  value={periodWindow}
+                  onChange={setPeriodWindow}
+                  shownCount={filtered.length}
+                  totalCount={baseFiltered.length}
+                />
+              </div>
+
+              {/* Controls Row: Subject Filter + Comparison Mode */}
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+                {/* Subject Filter Pills for Scored Comparison */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 mr-1">
+                    Subject Filter:
+                  </span>
+                  {['all', ...allSubjectNames].map((subj, idx) => {
+                    const active = compSubjectFilter === subj;
+                    const col =
+                      subj === 'all' ? 'var(--accent)' : getSubjectColor(subj, idx);
+                    return (
+                      <button
+                        key={subj}
+                        type="button"
+                        onClick={() => setCompSubjectFilter(subj)}
+                        style={{
+                          padding: '5px 11px',
+                          borderRadius: 'var(--radius-button)',
+                          fontSize: 11.5,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          border: '1px solid',
+                          borderColor: active ? col : 'var(--border-subtle)',
+                          background: active
+                            ? 'rgba(13, 148, 136, 0.14)'
+                            : 'var(--bg-elevated)',
+                          color: active ? col : 'var(--text-secondary)',
+                          transition: 'all 130ms',
+                        }}
+                      >
+                        {subj === 'all' ? 'All Subjects' : subj}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Comparison Cohort Mode Selector */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">
+                    Compare:
+                  </span>
+                  <div
+                    className="flex gap-1 flex-wrap"
+                    style={{
+                      background: 'var(--bg-elevated)',
+                      borderRadius: 'var(--radius-button)',
+                      padding: 2,
+                      border: '1px solid var(--border-subtle)',
+                    }}
+                  >
+                    {(
+                      [
+                        { id: 'latestVsPast3' as const, label: 'Latest vs Past 3 Avg' },
+                        { id: 'latestVsPast5' as const, label: 'Latest vs Past 5 Avg' },
+                        { id: 'recent3VsPrior3' as const, label: 'Recent 3 vs Prior 3' },
+                        { id: 'latestVsPrev1' as const, label: 'Latest vs Prev Paper' },
+                        { id: 'headToHead' as const, label: 'Pick 2 Papers' },
+                      ] as const
+                    ).map(cm => (
+                      <button
+                        key={cm.id}
+                        type="button"
+                        onClick={() => setCompMode(cm.id)}
+                        style={{
+                          padding: '4px 9px',
+                          borderRadius: 6,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          border: 'none',
+                          cursor: 'pointer',
+                          background:
+                            compMode === cm.id ? 'var(--accent)' : 'transparent',
+                          color:
+                            compMode === cm.id ? '#06130E' : 'var(--text-tertiary)',
+                        }}
+                      >
+                        {cm.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Head-to-Head Paper Picker Row when 'headToHead' is active */}
+              {compMode === 'headToHead' && (
+                <div
+                  className="flex flex-wrap items-center gap-3 p-3 rounded-[8px] mb-5"
+                  style={{
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-slate-400">
+                      Baseline Paper (A):
+                    </span>
+                    <select
+                      value={
+                        headToHeadAId ||
+                        baseFiltered[Math.max(0, baseFiltered.length - 2)]?.id ||
+                        ''
+                      }
+                      onChange={e => setHeadToHeadAId(e.target.value)}
+                      className="field !w-auto !py-1.5 !px-2.5 !text-xs"
+                    >
+                      {baseFiltered.map(a => (
+                        <option key={a.id} value={a.id}>
+                          {format(parseISO(a.date), 'MMM d')} — {a.attemptName} (
+                          {a.totalScore}/{a.maxScore})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <span className="text-xs font-mono text-slate-500">vs.</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-slate-400">
+                      Target Paper (B):
+                    </span>
+                    <select
+                      value={
+                        headToHeadBId ||
+                        baseFiltered[baseFiltered.length - 1]?.id ||
+                        ''
+                      }
+                      onChange={e => setHeadToHeadBId(e.target.value)}
+                      className="field !w-auto !py-1.5 !px-2.5 !text-xs"
+                    >
+                      {baseFiltered.map(a => (
+                        <option key={a.id} value={a.id}>
+                          {format(parseISO(a.date), 'MMM d')} — {a.attemptName} (
+                          {a.totalScore}/{a.maxScore})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Scored Comparison Delta Summary Banner */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                <div
+                  className="p-3.5 rounded-[10px]"
+                  style={{
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  <p className="text-[11px] text-slate-400 font-semibold">
+                    {compSubjectFilter === 'all'
+                      ? 'Total Score Shift'
+                      : `${compSubjectFilter} Score Shift`}
+                  </p>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span
+                      className="font-mono text-[20px] font-bold"
+                      style={{
+                        color:
+                          scoredComparisonSuite.scoreDelta >= 0
+                            ? 'var(--success)'
+                            : 'var(--danger)',
+                      }}
+                    >
+                      {scoredComparisonSuite.scoreDelta >= 0
+                        ? `+${scoredComparisonSuite.scoreDelta}m`
+                        : `${scoredComparisonSuite.scoreDelta}m`}
+                    </span>
+                    <span className="font-mono text-[11px] text-slate-400">
+                      ({scoredComparisonSuite.summaryBase.score}m →{' '}
+                      {scoredComparisonSuite.summaryRecent.score}m)
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  className="p-3.5 rounded-[10px]"
+                  style={{
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  <p className="text-[11px] text-slate-400 font-semibold">
+                    Normalized % Improvement
+                  </p>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span
+                      className="font-mono text-[20px] font-bold"
+                      style={{
+                        color:
+                          scoredComparisonSuite.pctDelta >= 0
+                            ? 'var(--info)'
+                            : 'var(--danger)',
+                      }}
+                    >
+                      {scoredComparisonSuite.pctDelta >= 0
+                        ? `+${scoredComparisonSuite.pctDelta}%`
+                        : `${scoredComparisonSuite.pctDelta}%`}
+                    </span>
+                    <span className="font-mono text-[11px] text-slate-400">
+                      ({scoredComparisonSuite.summaryBase.pct}% →{' '}
+                      {scoredComparisonSuite.summaryRecent.pct}%)
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  className="p-3.5 rounded-[10px]"
+                  style={{
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  <p className="text-[11px] text-slate-400 font-semibold">
+                    Accuracy Shift
+                  </p>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span
+                      className="font-mono text-[20px] font-bold"
+                      style={{
+                        color:
+                          scoredComparisonSuite.accDelta >= 0
+                            ? 'var(--success)'
+                            : 'var(--danger)',
+                      }}
+                    >
+                      {scoredComparisonSuite.accDelta >= 0
+                        ? `+${scoredComparisonSuite.accDelta}%`
+                        : `${scoredComparisonSuite.accDelta}%`}
+                    </span>
+                    <span className="font-mono text-[11px] text-slate-400">
+                      ({scoredComparisonSuite.summaryBase.accuracy}% →{' '}
+                      {scoredComparisonSuite.summaryRecent.accuracy}%)
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  className="p-3.5 rounded-[10px]"
+                  style={{
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid rgba(245, 158, 11, 0.28)',
+                  }}
+                >
+                  <p className="text-[11px] text-amber-400 font-semibold">
+                    Silly-Free Potential Ceiling
+                  </p>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className="font-mono text-[20px] font-bold text-amber-400">
+                      {scoredComparisonSuite.summaryRecent.potentialScore}m
+                    </span>
+                    <span className="font-mono text-[11px] text-slate-400">
+                      (+{scoredComparisonSuite.summaryRecent.sillyMarks}m from{' '}
+                      {scoredComparisonSuite.summaryRecent.sillyCount} silly Q)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Two Side-by-Side Improvement Charts */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                {/* Chart A: Scored Comparison Bar Chart (Past Baseline vs Recent vs Silly-Free Potential) */}
+                <div
+                  className="p-4 rounded-[10px]"
+                  style={{
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-[13.5px] font-bold text-slate-100">
+                        {compSubjectFilter === 'all'
+                          ? `Subject Scored Comparison (${scoredComparisonSuite.cohortALabel} vs ${scoredComparisonSuite.cohortBLabel})`
+                          : `${compSubjectFilter} Paper-by-Paper Score vs Silly-Free Potential`}
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        {compSubjectFilter === 'all'
+                          ? 'Compares baseline average, recent score, and recoverable ceiling without silly mistakes'
+                          : `Tracks ${compSubjectFilter} actual marks vs potential marks across the ${periodWindow} window`}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ height: 245 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      {compSubjectFilter === 'all' ? (
+                        <BarChart
+                          data={scoredComparisonSuite.subjectComparisonBars}
+                          margin={{ left: -12, right: 12, top: 10, bottom: 0 }}
+                        >
+                          <CartesianGrid
+                            strokeDasharray="0"
+                            stroke="var(--border-subtle)"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="subject"
+                            tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
+                            stroke="transparent"
+                          />
+                          <YAxis
+                            tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }}
+                            stroke="transparent"
+                            width={36}
+                          />
+                          <Tooltip
+                            content={({ active, payload, label }) => {
+                              if (!active || !payload?.length) return null;
+                              const row = payload[0]?.payload;
+                              return (
+                                <div
+                                  className="card-glass"
+                                  style={{ padding: '10px 13px' }}
+                                >
+                                  <p className="text-xs font-bold text-slate-100 mb-1">
+                                    {label} (Template Max: {row.templateMax}m)
+                                  </p>
+                                  <p className="font-mono text-[11.5px] text-slate-300">
+                                    {scoredComparisonSuite.cohortALabel}:{' '}
+                                    <strong>{row.baselineScore}m</strong> (Acc{' '}
+                                    {row.baselineAcc}%)
+                                  </p>
+                                  <p className="font-mono text-[11.5px] text-emerald-400 font-bold">
+                                    {scoredComparisonSuite.cohortBLabel}:{' '}
+                                    {row.recentScore}m (
+                                    {row.scoreDelta >= 0
+                                      ? `+${row.scoreDelta}m`
+                                      : `${row.scoreDelta}m`}
+                                    )
+                                  </p>
+                                  <p className="font-mono text-[11.5px] text-amber-400">
+                                    Silly-Free Potential: {row.sillyFreePotential}m (
+                                    {row.sillyCount} silly Q)
+                                  </p>
+                                </div>
+                              );
+                            }}
+                          />
+                          <Legend wrapperStyle={{ fontSize: 11 }} />
+                          <Bar
+                            dataKey="baselineScore"
+                            name={scoredComparisonSuite.cohortALabel}
+                            fill="#64748B"
+                            radius={[4, 4, 0, 0]}
+                            isAnimationActive={false}
+                          />
+                          <Bar
+                            dataKey="recentScore"
+                            name={scoredComparisonSuite.cohortBLabel}
+                            fill="#10B981"
+                            radius={[4, 4, 0, 0]}
+                            isAnimationActive={false}
+                          />
+                          <Bar
+                            dataKey="sillyFreePotential"
+                            name="Silly-Free Potential"
+                            fill="#F59E0B"
+                            radius={[4, 4, 0, 0]}
+                            isAnimationActive={false}
+                          />
+                        </BarChart>
+                      ) : (
+                        <ComposedChart
+                          data={scoredComparisonSuite.periodPoints}
+                          margin={{ left: -12, right: 12, top: 10, bottom: 0 }}
+                        >
+                          <CartesianGrid
+                            strokeDasharray="0"
+                            stroke="var(--border-subtle)"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="label"
+                            tick={{ fontSize: 10.5, fill: 'var(--text-tertiary)' }}
+                            stroke="transparent"
+                          />
+                          <YAxis
+                            tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }}
+                            stroke="transparent"
+                            width={36}
+                          />
+                          <Tooltip
+                            content={({ active, payload }) => {
+                              if (!active || !payload?.length) return null;
+                              const row = payload[0]?.payload;
+                              return (
+                                <div
+                                  className="card-glass"
+                                  style={{ padding: '10px 13px' }}
+                                >
+                                  <p className="text-xs font-bold text-slate-100">
+                                    {row.attemptName} ({row.label})
+                                  </p>
+                                  <p className="font-mono text-[11.5px] text-emerald-400 font-bold mt-1">
+                                    Actual Score: {row.score} / {row.maxScore}m
+                                  </p>
+                                  <p className="font-mono text-[11.5px] text-amber-400">
+                                    Silly-Free Potential: {row.potentialScore}m (+
+                                    {row.sillyMarks}m from {row.sillyCount} silly Q)
+                                  </p>
+                                  <p className="font-mono text-[11px] text-sky-400">
+                                    3-Paper Rolling Avg: {row.rollingAvgScore}m
+                                  </p>
+                                </div>
+                              );
+                            }}
+                          />
+                          <Legend wrapperStyle={{ fontSize: 11 }} />
+                          <ReferenceLine
+                            y={scoredComparisonSuite.summaryBase.score}
+                            stroke="#94A3B8"
+                            strokeDasharray="4 4"
+                            label={{
+                              value: `Baseline Avg: ${scoredComparisonSuite.summaryBase.score}m`,
+                              position: 'insideTopLeft',
+                              fill: '#94A3B8',
+                              fontSize: 10,
+                            }}
+                          />
+                          <Bar
+                            dataKey="score"
+                            name={`${compSubjectFilter} Actual Score`}
+                            fill={getSubjectColor(compSubjectFilter)}
+                            radius={[4, 4, 0, 0]}
+                            isAnimationActive={false}
+                          />
+                          <Bar
+                            dataKey="potentialScore"
+                            name="Silly-Free Potential"
+                            fill="#F59E0B"
+                            radius={[4, 4, 0, 0]}
+                            isAnimationActive={false}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="rollingAvgScore"
+                            name="3-Paper Rolling Avg"
+                            stroke="#A855F7"
+                            strokeWidth={2.3}
+                            dot={{ r: 3, fill: '#A855F7' }}
+                            isAnimationActive={false}
+                          />
+                        </ComposedChart>
+                      )}
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Chart B: Paper-over-Paper Improvement Delta (+Δ / -Δ) & Rolling Trajectory */}
+                <div
+                  className="p-4 rounded-[10px]"
+                  style={{
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-[13.5px] font-bold text-slate-100">
+                        Paper-by-Paper Improvement Delta (
+                        {compSubjectFilter === 'all'
+                          ? 'All Subjects'
+                          : compSubjectFilter}
+                        )
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        Green/Red bars show net score gain or drop vs. preceding paper; line tracks 3-paper rolling %
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ height: 245 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart
+                        data={scoredComparisonSuite.periodPoints}
+                        margin={{ left: -12, right: 12, top: 10, bottom: 0 }}
+                      >
+                        <CartesianGrid
+                          strokeDasharray="0"
+                          stroke="var(--border-subtle)"
+                          vertical={false}
+                        />
+                        <XAxis
+                          dataKey="label"
+                          tick={{ fontSize: 10.5, fill: 'var(--text-tertiary)' }}
+                          stroke="transparent"
+                        />
+                        <YAxis
+                          yAxisId="left"
+                          tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }}
+                          stroke="transparent"
+                          width={36}
+                        />
+                        <YAxis
+                          yAxisId="right"
+                          orientation="right"
+                          domain={[0, 100]}
+                          tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }}
+                          stroke="transparent"
+                          width={34}
+                        />
+                        <Tooltip
+                          content={({ active, payload }) => {
+                            if (!active || !payload?.length) return null;
+                            const row = payload[0]?.payload;
+                            return (
+                              <div
+                                className="card-glass"
+                                style={{ padding: '10px 13px' }}
+                              >
+                                <p className="text-xs font-bold text-slate-100">
+                                  {row.attemptName} ({row.label})
+                                </p>
+                                <p
+                                  className="font-mono text-[11.5px] font-bold mt-1"
+                                  style={{
+                                    color:
+                                      row.deltaMarks >= 0
+                                        ? 'var(--success)'
+                                        : 'var(--danger)',
+                                  }}
+                                >
+                                  Paper-over-Paper Δ:{' '}
+                                  {row.deltaMarks >= 0
+                                    ? `+${row.deltaMarks}m`
+                                    : `${row.deltaMarks}m`}{' '}
+                                  ({row.deltaPct >= 0 ? `+${row.deltaPct}%` : `${row.deltaPct}%`})
+                                </p>
+                                <p className="font-mono text-[11.5px] text-sky-400">
+                                  3-Paper Rolling Score %: {row.rollingAvgPct}%
+                                </p>
+                                <p className="font-mono text-[11px] text-slate-300">
+                                  Score: {row.score}/{row.maxScore}m ({row.pct}%)
+                                </p>
+                              </div>
+                            );
+                          }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <ReferenceLine
+                          yAxisId="left"
+                          y={0}
+                          stroke="var(--border-subtle)"
+                        />
+                        <Bar
+                          yAxisId="left"
+                          dataKey="deltaMarks"
+                          name="Score Δ vs Prev Paper (Marks)"
+                          radius={[4, 4, 0, 0]}
+                          isAnimationActive={false}
+                        >
+                          {scoredComparisonSuite.periodPoints.map((entry, idx) => (
+                            <Cell
+                              key={`cell-${idx}`}
+                              fill={entry.deltaMarks >= 0 ? '#10B981' : '#F43F5E'}
+                            />
+                          ))}
+                        </Bar>
+                        <Line
+                          yAxisId="right"
+                          type="monotone"
+                          dataKey="rollingAvgPct"
+                          name="3-Paper Rolling Avg %"
+                          stroke="#38BDF8"
+                          strokeWidth={2.5}
+                          dot={{ r: 3.5, fill: '#38BDF8' }}
+                          isAnimationActive={false}
+                        />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Subject-Wise Silly Mistake Trend & Interactive Quick-Ledge Panel */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+              {/* Left 7 cols: Per-Subject Silly Mistake Counts Graph */}
+              <div className="card lg:col-span-7" style={{ padding: 22 }}>
+                <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Zap size={15} style={{ color: 'var(--warning)' }} />
+                      <p className="card-title">
+                        Subject-Wise Silly Mistake Counts Across Papers
+                      </p>
+                    </div>
+                    <p className="text-[11.5px] text-slate-400 mt-0.5">
+                      Tracks Physics, Chemistry, and Mathematics careless/silly errors per paper and recoverable marks leaked
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ height: 235 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart
+                      data={scoredComparisonSuite.periodPoints}
+                      margin={{ left: -12, right: 12, top: 10, bottom: 0 }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="0"
+                        stroke="var(--border-subtle)"
+                        vertical={false}
+                      />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 10.5, fill: 'var(--text-tertiary)' }}
+                        stroke="transparent"
+                      />
+                      <YAxis
+                        yAxisId="left"
+                        allowDecimals={false}
+                        tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }}
+                        stroke="transparent"
+                        width={32}
+                      />
+                      <YAxis
+                        yAxisId="right"
+                        orientation="right"
+                        tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }}
+                        stroke="transparent"
+                        width={36}
+                      />
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (!active || !payload?.length) return null;
+                          const row = payload[0]?.payload;
+                          return (
+                            <div
+                              className="card-glass"
+                              style={{ padding: '10px 13px' }}
+                            >
+                              <p className="text-xs font-bold text-slate-100 mb-1">
+                                {row.attemptName} ({row.label})
+                              </p>
+                              <p className="font-mono text-[11.5px] text-sky-400">
+                                Physics Silly: {row.sillyPhysics} Q
+                              </p>
+                              <p className="font-mono text-[11.5px] text-amber-400">
+                                Chemistry Silly: {row.sillyChemistry} Q
+                              </p>
+                              <p className="font-mono text-[11.5px] text-emerald-400">
+                                Mathematics Silly: {row.sillyMaths} Q
+                              </p>
+                              <p className="font-mono text-[11.5px] text-rose-400 font-bold mt-1 pt-1 border-t border-slate-800">
+                                Total Marks Leaked to Silly: -{row.sillyMarks}m
+                              </p>
+                            </div>
+                          );
+                        }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      <Bar
+                        yAxisId="left"
+                        dataKey="sillyPhysics"
+                        stackId="silly"
+                        name="Physics Silly Q"
+                        fill="#38BDF8"
+                        isAnimationActive={false}
+                      />
+                      <Bar
+                        yAxisId="left"
+                        dataKey="sillyChemistry"
+                        stackId="silly"
+                        name="Chemistry Silly Q"
+                        fill="#F59E0B"
+                        isAnimationActive={false}
+                      />
+                      <Bar
+                        yAxisId="left"
+                        dataKey="sillyMaths"
+                        stackId="silly"
+                        name="Mathematics Silly Q"
+                        fill="#10B981"
+                        radius={[4, 4, 0, 0]}
+                        isAnimationActive={false}
+                      />
+                      <Line
+                        yAxisId="right"
+                        type="monotone"
+                        dataKey="sillyMarks"
+                        name="Marks Leaked (-m)"
+                        stroke="#F43F5E"
+                        strokeWidth={2.2}
+                        dot={{ r: 3.5, fill: '#F43F5E' }}
+                        isAnimationActive={false}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Right 5 cols: Interactive Quick-Ledge Subject Silly Mistakes Panel */}
+              <div className="card lg:col-span-5" style={{ padding: 22 }}>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <p className="card-title text-[14.5px]">
+                      Quick-Ledge Subject Silly Mistakes
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Log or adjust per-subject silly mistake counts for any paper directly
+                    </p>
+                  </div>
+                  {savedSillyBanner && (
+                    <span className="text-[11px] font-mono text-emerald-400 flex items-center gap-1">
+                      <Check size={12} /> Saved
+                    </span>
+                  )}
+                </div>
+
+                {targetLedgeAttempt && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="field-label !text-[10.5px]">
+                        Select Test Attempt to Ledge Silly Mistakes
+                      </label>
+                      <select
+                        value={targetLedgeAttempt.id}
+                        onChange={e => setLedgeAttemptId(e.target.value)}
+                        className="field !py-1.5 !px-2.5 !text-xs"
+                      >
+                        {baseFiltered
+                          .slice()
+                          .reverse()
+                          .map(a => (
+                            <option key={a.id} value={a.id}>
+                              {format(parseISO(a.date), 'MMM d')} — {a.attemptName}{' '}
+                              ({a.totalSillyMistakes ?? 0} silly Q)
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      {allSubjectNames.slice(0, 3).map((sn, idx) => {
+                        const col = getSubjectColor(sn, idx);
+                        const st = getSubjectSillyTelemetry(
+                          targetLedgeAttempt,
+                          sn,
+                          subjectPaperScope,
+                          mistakes
+                        );
+                        return (
+                          <div
+                            key={sn}
+                            className="flex items-center justify-between p-2.5 rounded-[8px]"
+                            style={{
+                              background: 'var(--bg-elevated)',
+                              border: '1px solid var(--border-subtle)',
+                            }}
+                          >
+                            <div>
+                              <span
+                                className="text-[13px] font-bold"
+                                style={{ color: col }}
+                              >
+                                {sn}
+                              </span>
+                              <p className="font-mono text-[10.5px] text-slate-400">
+                                {st.count} silly Q · -{st.marksImpact}m impact
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleAdjustSubjectSillyCount(
+                                    targetLedgeAttempt,
+                                    sn,
+                                    -1
+                                  )
+                                }
+                                disabled={!onUpdateAttempt || st.count <= 0}
+                                className="btn-ghost !p-1.5"
+                                title={`Decrease ${sn} silly mistakes`}
+                              >
+                                <Minus size={12} />
+                              </button>
+                              <input
+                                type="number"
+                                min={0}
+                                max={50}
+                                value={st.count}
+                                onChange={e =>
+                                  handleAdjustSubjectSillyCount(
+                                    targetLedgeAttempt,
+                                    sn,
+                                    Math.max(0, parseInt(e.target.value, 10) || 0),
+                                    true
+                                  )
+                                }
+                                className="field font-mono text-center !w-14 !py-1 !px-1.5 !text-[13px]"
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleAdjustSubjectSillyCount(
+                                    targetLedgeAttempt,
+                                    sn,
+                                    1
+                                  )
+                                }
+                                disabled={!onUpdateAttempt}
+                                className="btn-ghost !p-1.5"
+                                title={`Increase ${sn} silly mistakes`}
+                              >
+                                <Plus size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div
+                      className="flex items-center justify-between pt-2.5 border-t border-slate-800/80 font-mono text-xs"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      <span>
+                        Actual: <strong>{targetLedgeAttempt.totalScore}</strong>/
+                        {targetLedgeAttempt.maxScore}m
+                      </span>
+                      <span className="text-amber-400 font-bold">
+                        Silly-Free Score:{' '}
+                        {Math.min(
+                          targetLedgeAttempt.maxScore,
+                          Number(
+                            (
+                              targetLedgeAttempt.totalScore +
+                              (targetLedgeAttempt.sillyMarksLost ?? 0)
+                            ).toFixed(1)
+                          )
+                        )}
+                        m
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+      {/* =====================================================================
+          SECTION 1: SUBJECT-WISE SCORE & MULTI-ASPECT TRENDS SUITE
          ===================================================================== */}
       {(sectionView === 'all' || sectionView === 'subjectTrends') && (
         <div className="space-y-5">
@@ -1899,17 +3402,21 @@ export function TestAnalytics({
                 </p>
               </div>
 
-              {/* Template Selector & Inline Template Max Score Editor Trigger */}
-              <div className="flex items-center gap-2 flex-wrap">
+              {/* Period Window + Template Selector & Inline Template Max Score Editor Trigger */}
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <PeriodSelectorBar
+                  value={periodWindow}
+                  onChange={setPeriodWindow}
+                  shownCount={subjectFilteredAttempts.length}
+                  totalCount={subjectBaseAttempts.length}
+                />
+
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">
-                    Blueprint:
-                  </span>
                   <select
                     value={subjectChartTemplateId}
                     onChange={e => setSubjectChartTemplateId(e.target.value)}
                     className="field"
-                    style={{ width: 'auto', padding: '6px 11px', fontSize: 12 }}
+                    style={{ width: 'auto', padding: '5px 10px', fontSize: 11.5 }}
                   >
                     <option value="all">
                       All Templates (Ref:{' '}
@@ -1931,11 +3438,11 @@ export function TestAnalytics({
                     type="button"
                     onClick={() => openInlineTemplateEditor(activeSubjectTemplate)}
                     className={showTemplateMaxEditor ? 'btn-primary' : 'btn-ghost'}
-                    style={{ padding: '6px 11px', fontSize: 11.5 }}
+                    style={{ padding: '5px 10px', fontSize: 11.5 }}
                     title="View or modify subject max scores in the active template"
                   >
                     <Sliders size={13} />
-                    Template Max Scores (
+                    Template Max (
                     {allSubjectNames
                       .slice(0, 3)
                       .map(
@@ -2143,8 +3650,32 @@ export function TestAnalytics({
                   })}
                 </div>
 
-                {/* Paper Scope (for JEE Advanced) & Chart Type Switcher */}
+                {/* Paper Scope (for JEE Advanced), Rolling Avg & Chart Type Switcher */}
                 <div className="flex items-center gap-2 flex-wrap">
+                  {selectedSubjectFilter !== 'all' && (
+                    <button
+                      type="button"
+                      onClick={() => setShowRollingAvg(p => !p)}
+                      style={{
+                        padding: '4px 9px',
+                        borderRadius: 6,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        border: '1px solid',
+                        borderColor: showRollingAvg
+                          ? '#A855F7'
+                          : 'var(--border-subtle)',
+                        background: showRollingAvg
+                          ? 'rgba(168, 85, 247, 0.14)'
+                          : 'var(--bg-elevated)',
+                        color: showRollingAvg ? '#C084FC' : 'var(--text-tertiary)',
+                      }}
+                    >
+                      3P Rolling Avg
+                    </button>
+                  )}
+
                   <div
                     className="flex gap-1"
                     style={{
@@ -2231,7 +3762,7 @@ export function TestAnalytics({
                 </div>
               </div>
 
-              {/* Row B: Aspect / Dimension Selector (7 Aspects) */}
+              {/* Row B: Aspect / Dimension Selector (9 Aspects) */}
               <div className="flex items-center gap-1.5 flex-wrap pt-1">
                 <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 mr-1">
                   Aspect:
@@ -2292,7 +3823,7 @@ export function TestAnalytics({
                 }}
               >
                 <p style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>
-                  No test attempts logged for the selected template/filter
+                  No test attempts logged for the selected template/period
                 </p>
               </div>
             )}
@@ -2303,10 +3834,10 @@ export function TestAnalytics({
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
               <div>
                 <h4 className="text-[14.5px] font-bold text-slate-100">
-                  Separate Subject Score Trend Cards (vs. Template Max Score)
+                  Separate Subject Score Trend Cards (vs. Template Max & Silly-Free Potential)
                 </h4>
                 <p className="text-[11.5px] text-slate-400">
-                  Independent subject trajectories with template max ceilings, accuracy, negative marks, and pacing vs. ideal time
+                  Independent subject trajectories with template max ceilings, silly mistake counts, accuracy, and pacing vs. ideal time
                 </p>
               </div>
             </div>
@@ -2330,12 +3861,12 @@ export function TestAnalytics({
                         >
                           {sc.subject}
                         </span>
-                        <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-slate-800/90 text-slate-300">
-                          Template Max: {sc.templateMax}m
+                        <span className="font-mono text-[11px] text-slate-400">
+                          · Max {sc.templateMax}m
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-400 mt-0.5 font-mono">
-                        Ideal Time: {sc.idealMinPerPaper}m / paper · Avg Pace:{' '}
+                        Ideal: {sc.idealMinPerPaper}m · Avg Pace:{' '}
                         {sc.avgTimeMin > 0 ? `${sc.avgTimeMin}m` : '—'}
                       </p>
                     </div>
@@ -2438,6 +3969,12 @@ export function TestAnalytics({
                                   >
                                     Score: {p.score} / {p.maxScore}m ({p.scorePct}%)
                                   </p>
+                                  {p.sillyCount > 0 && (
+                                    <p className="font-mono text-[10.5px] text-amber-400">
+                                      Silly: {p.sillyCount} Q → Potential:{' '}
+                                      {p.potentialScore}m
+                                    </p>
+                                  )}
                                   <p className="font-mono text-[10.5px] text-slate-300">
                                     Acc: {p.accuracy}% · Attempt: {p.attemptRate}% ·
                                     Neg: -{p.negative}m
@@ -2462,6 +3999,16 @@ export function TestAnalytics({
                             dot={{ r: 3, fill: sc.color, strokeWidth: 0 }}
                             isAnimationActive={false}
                           />
+                          <Line
+                            type="monotone"
+                            dataKey="potentialScore"
+                            name="Silly-Free Potential"
+                            stroke="#F59E0B"
+                            strokeWidth={1.5}
+                            strokeDasharray="3 3"
+                            dot={false}
+                            isAnimationActive={false}
+                          />
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
@@ -2479,34 +4026,40 @@ export function TestAnalytics({
                   )}
 
                   {/* Per-Subject Aspect Telemetry Footer */}
-                  <div className="grid grid-cols-4 gap-1.5 mt-3 pt-3 border-t border-slate-800/80 font-mono text-center">
+                  <div className="grid grid-cols-5 gap-1 mt-3 pt-3 border-t border-slate-800/80 font-mono text-center">
                     <div>
                       <p className="text-[9.5px] uppercase text-slate-400">Peak</p>
-                      <p className="text-[12px] font-bold text-slate-100">
+                      <p className="text-[11.5px] font-bold text-slate-100">
                         {sc.peakScore}m
                       </p>
                     </div>
                     <div>
-                      <p className="text-[9.5px] uppercase text-slate-400">
-                        Accuracy
-                      </p>
-                      <p className="text-[12px] font-bold text-sky-400">
+                      <p className="text-[9.5px] uppercase text-slate-400">Acc</p>
+                      <p className="text-[11.5px] font-bold text-sky-400">
                         {sc.avgAcc}%
                       </p>
                     </div>
                     <div>
                       <p className="text-[9.5px] uppercase text-slate-400">
-                        Attempt %
+                        Attempt
                       </p>
-                      <p className="text-[12px] font-bold text-amber-400">
+                      <p className="text-[11.5px] font-bold text-emerald-400">
                         {sc.avgAttemptRate}%
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[9.5px] uppercase text-slate-400">
+                        Silly Q
+                      </p>
+                      <p className="text-[11.5px] font-bold text-amber-400">
+                        {sc.totalSillyQ} Q
                       </p>
                     </div>
                     <div>
                       <p className="text-[9.5px] uppercase text-slate-400">
                         Neg Cost
                       </p>
-                      <p className="text-[12px] font-bold text-rose-400">
+                      <p className="text-[11.5px] font-bold text-rose-400">
                         -{sc.totalNeg}m
                       </p>
                     </div>
@@ -2539,43 +4092,51 @@ export function TestAnalytics({
                 telemetry
               </p>
             </div>
-            <div
-              className="flex gap-1 flex-wrap"
-              style={{
-                background: 'var(--bg-elevated)',
-                borderRadius: 'var(--radius-button)',
-                padding: 3,
-                border: '1px solid var(--border-subtle)',
-              }}
-            >
-              {overallChartModes.map(m => {
-                const disabled =
-                  (m.id === 'paper' && !paperTrend) ||
-                  (m.id === 'efficiency' && !hasTimingData);
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => setChartMode(m.id)}
-                    disabled={disabled}
-                    style={{
-                      padding: '5px 10px',
-                      borderRadius: 'var(--radius-badge)',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      cursor: disabled ? 'default' : 'pointer',
-                      border: 'none',
-                      background:
-                        chartMode === m.id ? 'var(--accent)' : 'transparent',
-                      color:
-                        chartMode === m.id ? '#06130E' : 'var(--text-tertiary)',
-                      opacity: disabled ? 0.35 : 1,
-                    }}
-                  >
-                    {m.label}
-                  </button>
-                );
-              })}
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <PeriodSelectorBar
+                value={periodWindow}
+                onChange={setPeriodWindow}
+                shownCount={filtered.length}
+                totalCount={baseFiltered.length}
+              />
+              <div
+                className="flex gap-1 flex-wrap"
+                style={{
+                  background: 'var(--bg-elevated)',
+                  borderRadius: 'var(--radius-button)',
+                  padding: 3,
+                  border: '1px solid var(--border-subtle)',
+                }}
+              >
+                {overallChartModes.map(m => {
+                  const disabled =
+                    (m.id === 'paper' && !paperTrend) ||
+                    (m.id === 'efficiency' && !hasTimingData);
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setChartMode(m.id)}
+                      disabled={disabled}
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: 'var(--radius-badge)',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: disabled ? 'default' : 'pointer',
+                        border: 'none',
+                        background:
+                          chartMode === m.id ? 'var(--accent)' : 'transparent',
+                        color:
+                          chartMode === m.id ? '#06130E' : 'var(--text-tertiary)',
+                        opacity: disabled ? 0.35 : 1,
+                      }}
+                    >
+                      {m.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
@@ -3081,7 +4642,7 @@ export function TestAnalytics({
                   style={{ color: 'var(--text-secondary)', lineHeight: 1.65 }}
                 >
                   <p>
-                    Across your last{' '}
+                    Across the active window of{' '}
                     <strong className="tabular-num">{narrative.n}</strong> test
                     events, your trajectory is{' '}
                     <strong
@@ -3137,20 +4698,24 @@ export function TestAnalytics({
                     -point accuracy delta).
                   </p>
                   <p>
-                    Cumulative negative marking has cost{' '}
+                    Cumulative negative marking cost{' '}
                     <strong
                       className="tabular-num"
                       style={{ color: 'var(--danger)' }}
                     >
                       -{narrative.totalNegLost.toFixed(1)} marks
-                    </strong>{' '}
-                    (
-                    <span className="tabular-num">
-                      {narrative.negPctOfMax.toFixed(1)}%
-                    </span>{' '}
-                    of total maximum marks). Eliminating low-probability 50/50
-                    guesses in <strong>{insights.weakest.name}</strong> offers the
-                    fastest immediate rank jump.
+                    </strong>
+                    , while careless/silly errors accounted for{' '}
+                    <strong
+                      className="tabular-num"
+                      style={{ color: 'var(--warning)' }}
+                    >
+                      {stats.totalSillyQ} questions (-{stats.totalSillyMarks}m
+                      recoverable)
+                    </strong>
+                    . Eliminating silly slips in{' '}
+                    <strong>{insights.weakest.name}</strong> offers the fastest
+                    immediate score jump.
                   </p>
                 </div>
               </div>

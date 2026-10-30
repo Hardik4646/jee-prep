@@ -426,6 +426,18 @@ function RowBlock({
           >
             -{a.marksLostToNegative.toFixed(1)}
           </span>
+          {(a.totalSillyMistakes ?? 0) > 0 && (
+            <span
+              style={{
+                display: 'block',
+                fontSize: 10,
+                color: 'var(--warning)',
+                fontWeight: 600,
+              }}
+            >
+              {a.totalSillyMistakes} silly Q
+            </span>
+          )}
         </td>
         <td
           className="tabular-num"
@@ -498,6 +510,11 @@ function RowBlock({
                           subjTime && subjAttempted > 0
                             ? Math.round((subjTime * 60) / subjAttempted)
                             : null;
+                        const idealMin = s.subjectName.toLowerCase().includes('phys')
+                          ? 50
+                          : s.subjectName.toLowerCase().includes('chem')
+                          ? 40
+                          : 90;
 
                         return (
                           <div
@@ -528,19 +545,24 @@ function RowBlock({
                               </span>
                             </div>
                             <div
-                              className="flex items-center justify-between text-[11px] font-mono"
+                              className="flex items-center justify-between text-[11px] font-mono flex-wrap gap-1"
                               style={{ color: 'var(--text-tertiary)' }}
                             >
                               <span>
                                 {s.correct}C · {s.incorrect}W · {s.unattempted}U · {s.accuracy.toFixed(0)}% acc
+                                {(s.sillyMistakes ?? 0) > 0 && (
+                                  <span style={{ color: 'var(--warning)', fontWeight: 600 }}>
+                                    {' '}· {s.sillyMistakes} silly
+                                  </span>
+                                )}
                               </span>
                               {subjTime ? (
                                 <span
                                   style={{
-                                    color: subjTime > 65 ? 'var(--warning)' : 'var(--text-secondary)',
+                                    color: subjTime > idealMin + 8 ? 'var(--warning)' : 'var(--text-secondary)',
                                   }}
                                 >
-                                  {subjTime}m/60m{subjSecPerQ ? ` (${subjSecPerQ}s/Q)` : ''}
+                                  {subjTime}m/{idealMin}m{subjSecPerQ ? ` (${subjSecPerQ}s/Q)` : ''}
                                 </span>
                               ) : null}
                             </div>

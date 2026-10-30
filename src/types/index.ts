@@ -149,6 +149,8 @@ export interface SubjectScore {
   maxScore: number;
   accuracy: number;
   marksLostToNegative?: number;
+  sillyMistakes?: number;
+  sillyMarksLost?: number;
   timeSpentMinutes?: number;
   targetMinutes?: number;
   totalQuestions?: number;
@@ -170,6 +172,8 @@ export interface PaperScore {
   totalQuestions: number;
   accuracy: number;
   marksLostToNegative?: number;
+  totalSillyMistakes?: number;
+  sillyMarksLost?: number;
   timePhysics?: number;
   timeChemistry?: number;
   timeMaths?: number;
@@ -198,6 +202,11 @@ export interface TestAttempt {
   totalUnattempted: number;
   totalQuestions: number;
   marksLostToNegative: number;
+  totalSillyMistakes?: number;
+  sillyMarksLost?: number;
+  sillyPhysics?: number;
+  sillyChemistry?: number;
+  sillyMaths?: number;
   percentile?: number;
   targetScore?: number;
   targetAchieved: boolean;

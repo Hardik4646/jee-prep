@@ -256,6 +256,13 @@ export function TestTracker({
               templates={templates}
               mistakes={mistakes}
               onUpdateTemplate={handleSaveTemplate}
+              onUpdateAttempt={updated => {
+                setAttempts(prev =>
+                  (Array.isArray(prev) ? prev : []).map(a =>
+                    a.id === updated.id ? updated : a
+                  )
+                );
+              }}
               onEditTemplateInBuilder={t => {
                 setEditingTemplate(t);
                 setShowTemplateBuilder(true);

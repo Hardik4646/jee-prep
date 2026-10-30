@@ -73,16 +73,21 @@ export function computeSubjectScore(
   incorrect: number,
   unattempted: number,
   template?: ExamTemplate,
-  timeSpentMinutes?: number
+  timeSpentMinutes?: number,
+  sillyMistakes = 0
 ): SubjectScore {
   const safeCorrect = Math.max(0, correct);
   const safeIncorrect = Math.max(0, incorrect);
   const safeUnattempted = Math.max(0, unattempted);
+  const safeSilly = Math.max(0, sillyMistakes);
   const marksLost = s.negativePerWrong < 0 ? safeIncorrect * Math.abs(s.negativePerWrong) : 0;
   const score = Number((safeCorrect * s.marksPerCorrect - marksLost).toFixed(2));
   const maxScore = subjectMaxScore(s, template);
   const attempted = safeCorrect + safeIncorrect;
   const accuracy = attempted > 0 ? Number(((safeCorrect / attempted) * 100).toFixed(2)) : 0;
+  // Each silly mistake on a wrong question costs marksPerCorrect + |negativePerWrong| (recoverable swing)
+  const swingPerSilly = s.marksPerCorrect + (s.negativePerWrong < 0 ? Math.abs(s.negativePerWrong) : 0);
+  const sillyMarksLost = Number((safeSilly * swingPerSilly).toFixed(2));
 
   return {
     subjectName: s.name,
@@ -93,6 +98,8 @@ export function computeSubjectScore(
     maxScore,
     accuracy,
     marksLostToNegative: Number(marksLost.toFixed(2)),
+    sillyMistakes: safeSilly,
+    sillyMarksLost,
     timeSpentMinutes: timeSpentMinutes && timeSpentMinutes > 0 ? timeSpentMinutes : undefined,
     targetMinutes: s.targetMinutes ?? getSubjectIdealMinutes(s.name),
     totalQuestions: s.numQuestions,
@@ -101,7 +108,7 @@ export function computeSubjectScore(
 
 export function computePaperScore(
   subjects: TemplateSubject[],
-  scores: { correct: number; incorrect: number; unattempted: number }[],
+  scores: { correct: number; incorrect: number; unattempted: number; sillyMistakes?: number }[],
   template?: ExamTemplate,
   paperTiming?: PaperSubjectTiming
 ): PaperScore {
@@ -114,7 +121,8 @@ export function computePaperScore(
       scores[i]?.incorrect ?? 0,
       scores[i]?.unattempted ?? 0,
       template,
-      subjTime
+      subjTime,
+      scores[i]?.sillyMistakes ?? 0
     );
   });
 
@@ -126,6 +134,10 @@ export function computePaperScore(
   const totalQuestions = subjects.reduce((a, b) => a + b.numQuestions, 0);
   const marksLostToNegative = Number(
     subjScores.reduce((a, b) => a + (b.marksLostToNegative ?? 0), 0).toFixed(2)
+  );
+  const totalSillyMistakes = subjScores.reduce((a, b) => a + (b.sillyMistakes ?? 0), 0);
+  const sillyMarksLost = Number(
+    subjScores.reduce((a, b) => a + (b.sillyMarksLost ?? 0), 0).toFixed(2)
   );
   const accuracy =
     totalCorrect + totalIncorrect > 0
@@ -147,12 +159,72 @@ export function computePaperScore(
     totalQuestions,
     accuracy,
     marksLostToNegative,
+    totalSillyMistakes,
+    sillyMarksLost,
     timePhysics: tP > 0 ? tP : undefined,
     timeChemistry: tC > 0 ? tC : undefined,
     timeMaths: tM > 0 ? tM : undefined,
     timeTakenMinutes: paperTotalTime > 0 ? paperTotalTime : undefined,
     targetDurationMinutes: PAPER_DURATION_MINUTES,
   };
+}
+
+/**
+ * Extracts per-subject silly mistake count and recoverable marks for a test attempt,
+ * combining explicit SubjectScore.sillyMistakes, top-level sillyPhysics/Chemistry/Maths,
+ * or linked Mistake Ledger items categorized as 'Careless/Silly' or 'Calculation'.
+ */
+export function getSubjectSillyTelemetry(
+  attempt: TestAttempt,
+  subjectName: string,
+  paperScope: 'combined' | 'paper1' | 'paper2' = 'combined',
+  mistakes: Mistake[] = []
+): { count: number; marksImpact: number } {
+  const canon = normalizeCanonicalSubject(subjectName);
+  const papersToRead =
+    paperScope === 'paper1'
+      ? [attempt.papers[0]].filter(Boolean)
+      : paperScope === 'paper2'
+      ? [attempt.papers[1]].filter(Boolean)
+      : attempt.papers;
+
+  const matchingScores = papersToRead
+    .flatMap(p => p?.subjects ?? [])
+    .filter(
+      s =>
+        s.subjectName === subjectName ||
+        (canon && normalizeCanonicalSubject(s.subjectName) === canon)
+    );
+
+  let explicitCount = matchingScores.reduce((sum, s) => sum + (s.sillyMistakes ?? 0), 0);
+  let explicitMarks = matchingScores.reduce((sum, s) => sum + (s.sillyMarksLost ?? 0), 0);
+
+  if (explicitCount === 0 && paperScope === 'combined') {
+    if (canon === 'physics' && attempt.sillyPhysics) explicitCount = attempt.sillyPhysics;
+    else if (canon === 'chemistry' && attempt.sillyChemistry) explicitCount = attempt.sillyChemistry;
+    else if (canon === 'maths' && attempt.sillyMaths) explicitCount = attempt.sillyMaths;
+  }
+
+  // Fallback to Mistake Ledger items linked to this attempt if not explicitly set
+  if (explicitCount === 0 && mistakes.length > 0) {
+    const linked = mistakes.filter(m => {
+      if (m.sourceAttemptId !== attempt.id) return false;
+      if (m.errorCategory !== 'Careless/Silly' && m.errorCategory !== 'Calculation') return false;
+      const mCanon = normalizeCanonicalSubject(m.subject);
+      return m.subject === subjectName || (canon && mCanon === canon);
+    });
+    if (linked.length > 0) {
+      explicitCount = linked.length;
+      explicitMarks = linked.reduce((sum, m) => sum + (m.marksLost ?? 5), 0);
+    }
+  }
+
+  // Default swing per silly mistake (e.g. 5 marks in JEE Main [+4/-1], ~4.33 in JEE Adv)
+  const defaultSwing = attempt.pattern === 'dual' ? 4.33 : 5;
+  const marksImpact =
+    explicitMarks > 0 ? Number(explicitMarks.toFixed(1)) : Number((explicitCount * defaultSwing).toFixed(1));
+
+  return { count: explicitCount, marksImpact };
 }
 
 export function createMistakesFromTest(

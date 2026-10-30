@@ -99,7 +99,7 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
   });
 
   const [paperInputs, setPaperInputs] = useState<
-    { correct: string; incorrect: string; unattempted: string }[][]
+    { correct: string; incorrect: string; unattempted: string; sillyMistakes: string }[][]
   >(() => {
     if (editing) {
       return editing.papers.map(p =>
@@ -107,13 +107,19 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
           correct: String(s.correct),
           incorrect: String(s.incorrect),
           unattempted: String(s.unattempted),
+          sillyMistakes: s.sillyMistakes ? String(s.sillyMistakes) : '',
         }))
       );
     }
     const initialTpl = templates[0];
     return initialTpl
       ? initialTpl.papers.map(paper =>
-          paper.map(s => ({ correct: '', incorrect: '', unattempted: String(s.numQuestions) }))
+          paper.map(s => ({
+            correct: '',
+            incorrect: '',
+            unattempted: String(s.numQuestions),
+            sillyMistakes: '',
+          }))
         )
       : [];
   });
@@ -129,6 +135,7 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
       correct: string;
       incorrect: string;
       unattempted: string;
+      sillyMistakes: string;
     }[][]
   >(() => {
     if (editing) {
@@ -139,6 +146,7 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
           correct: String(s.correct),
           incorrect: String(s.incorrect),
           unattempted: String(s.unattempted),
+          sillyMistakes: s.sillyMistakes ? String(s.sillyMistakes) : '',
         }))
       );
     }
@@ -151,6 +159,7 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
             correct: '',
             incorrect: '',
             unattempted: String(s.numQuestions),
+            sillyMistakes: '',
           }))
         )
       : [];
@@ -180,7 +189,12 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
     setTemplateId(id);
     setPaperInputs(
       tpl.papers.map(paper =>
-        paper.map(s => ({ correct: '', incorrect: '', unattempted: String(s.numQuestions) }))
+        paper.map(s => ({
+          correct: '',
+          incorrect: '',
+          unattempted: String(s.numQuestions),
+          sillyMistakes: '',
+        }))
       )
     );
     setDirectMarks(tpl.papers.map(() => ''));
@@ -192,14 +206,15 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
           correct: '',
           incorrect: '',
           unattempted: String(s.numQuestions),
+          sillyMistakes: '',
         }))
       )
     );
     setPaperTimeInputs(
       Array.from({ length: tpl.pattern === 'dual' ? 2 : 1 }, () => ({
-        physics: '60',
-        chemistry: '50',
-        maths: '65',
+        physics: '50',
+        chemistry: '40',
+        maths: '85',
       }))
     );
     setEntryMode(tpl.marksPreset.every(Boolean) ? 'counts' : 'manual');
@@ -246,23 +261,29 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
 
       if (mode === 'marks') {
         const dm = parseFloat(directMarks[pi] ?? '') || 0;
+        const pInputs = paperInputs[pi] ?? [];
+        const subjScores: SubjectScore[] = paper.map((s, si) => {
+          const canonical = normalizeCanonicalSubject(s.name);
+          const silly = Math.max(0, parseInt(pInputs[si]?.sillyMistakes ?? '') || 0);
+          const swing = s.marksPerCorrect + (s.negativePerWrong < 0 ? Math.abs(s.negativePerWrong) : 0);
+          return {
+            subjectName: s.name,
+            correct: 0,
+            incorrect: 0,
+            unattempted: 0,
+            score: Number((dm / Math.max(1, paper.length)).toFixed(2)),
+            maxScore: subjectMaxScore(s, template),
+            accuracy: 0,
+            marksLostToNegative: 0,
+            sillyMistakes: silly,
+            sillyMarksLost: Number((silly * swing).toFixed(2)),
+            timeSpentMinutes: canonical ? pTiming[canonical] : undefined,
+            targetMinutes: s.targetMinutes ?? (canonical === 'physics' ? 50 : canonical === 'chemistry' ? 40 : 90),
+            totalQuestions: s.numQuestions,
+          };
+        });
         return {
-          subjects: paper.map(s => {
-            const canonical = normalizeCanonicalSubject(s.name);
-            return {
-              subjectName: s.name,
-              correct: 0,
-              incorrect: 0,
-              unattempted: 0,
-              score: Number((dm / Math.max(1, paper.length)).toFixed(2)),
-              maxScore: subjectMaxScore(s, template),
-              accuracy: 0,
-              marksLostToNegative: 0,
-              timeSpentMinutes: canonical ? pTiming[canonical] : undefined,
-              targetMinutes: s.targetMinutes ?? SUBJECT_TARGET_MINUTES_PER_PAPER,
-              totalQuestions: s.numQuestions,
-            };
-          }),
+          subjects: subjScores,
           totalScore: dm,
           maxScore: paper.reduce((a, s) => a + subjectMaxScore(s, template), 0),
           totalCorrect: 0,
@@ -271,6 +292,10 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
           totalQuestions: paper.reduce((a, s) => a + s.numQuestions, 0),
           accuracy: 0,
           marksLostToNegative: 0,
+          totalSillyMistakes: subjScores.reduce((a, b) => a + (b.sillyMistakes ?? 0), 0),
+          sillyMarksLost: Number(
+            subjScores.reduce((a, b) => a + (b.sillyMarksLost ?? 0), 0).toFixed(2)
+          ),
           timePhysics: pTiming.physics || undefined,
           timeChemistry: pTiming.chemistry || undefined,
           timeMaths: pTiming.maths || undefined,
@@ -288,11 +313,13 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
             correct: '',
             incorrect: '',
             unattempted: '',
+            sillyMistakes: '',
           };
           const positiveMarks = parseFloat(inp.marksObtained) || 0;
           const neg = Math.abs(parseFloat(inp.negativeMarks) || 0);
           const correct = Math.max(0, parseInt(inp.correct) || 0);
           const incorrect = Math.max(0, parseInt(inp.incorrect) || 0);
+          const silly = Math.max(0, parseInt(inp.sillyMistakes) || 0);
           const unattempted = Math.max(
             0,
             inp.unattempted !== ''
@@ -303,6 +330,7 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
           const attempted = correct + incorrect;
           const accuracy = attempted > 0 ? Number(((correct / attempted) * 100).toFixed(2)) : 0;
           const canonical = normalizeCanonicalSubject(s.name);
+          const swing = s.marksPerCorrect + (s.negativePerWrong < 0 ? Math.abs(s.negativePerWrong) : 0);
           return {
             subjectName: s.name,
             correct,
@@ -312,8 +340,10 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
             maxScore,
             accuracy,
             marksLostToNegative: Number(neg.toFixed(2)),
+            sillyMistakes: silly,
+            sillyMarksLost: Number((silly * swing).toFixed(2)),
             timeSpentMinutes: canonical ? pTiming[canonical] : undefined,
-            targetMinutes: s.targetMinutes ?? SUBJECT_TARGET_MINUTES_PER_PAPER,
+            targetMinutes: s.targetMinutes ?? (canonical === 'physics' ? 50 : canonical === 'chemistry' ? 40 : 90),
             totalQuestions: s.numQuestions,
           };
         });
@@ -331,6 +361,10 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
           marksLostToNegative: Number(
             subjScores.reduce((a, b) => a + (b.marksLostToNegative ?? 0), 0).toFixed(2)
           ),
+          totalSillyMistakes: subjScores.reduce((a, b) => a + (b.sillyMistakes ?? 0), 0),
+          sillyMarksLost: Number(
+            subjScores.reduce((a, b) => a + (b.sillyMarksLost ?? 0), 0).toFixed(2)
+          ),
           timePhysics: pTiming.physics || undefined,
           timeChemistry: pTiming.chemistry || undefined,
           timeMaths: pTiming.maths || undefined,
@@ -345,12 +379,13 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
         inputs.map((i, si) => {
           const c = Math.max(0, parseInt(i?.correct ?? '') || 0);
           const w = Math.max(0, parseInt(i?.incorrect ?? '') || 0);
+          const silly = Math.max(0, parseInt(i?.sillyMistakes ?? '') || 0);
           const maxQ = paper[si]?.numQuestions ?? 25;
           const u =
             i?.unattempted !== undefined && i.unattempted !== ''
               ? Math.max(0, parseInt(i.unattempted) || 0)
               : Math.max(0, maxQ - c - w);
-          return { correct: c, incorrect: w, unattempted: u };
+          return { correct: c, incorrect: w, unattempted: u, sillyMistakes: silly };
         }),
         template,
         pTiming
@@ -371,6 +406,34 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
   const livePct = liveMax > 0 ? Number(((liveTotal / liveMax) * 100).toFixed(2)) : 0;
   const liveMarksLost = Number(
     livePapers.reduce((a, p) => a + (p.marksLostToNegative ?? 0), 0).toFixed(2)
+  );
+  const liveSillyCount = livePapers.reduce((a, p) => a + (p.totalSillyMistakes ?? 0), 0);
+  const liveSillyMarksLost = Number(
+    livePapers.reduce((a, p) => a + (p.sillyMarksLost ?? 0), 0).toFixed(2)
+  );
+  const liveSillyPhysics = livePapers.reduce(
+    (sum, p) =>
+      sum +
+      p.subjects
+        .filter(s => normalizeCanonicalSubject(s.subjectName) === 'physics')
+        .reduce((a, b) => a + (b.sillyMistakes ?? 0), 0),
+    0
+  );
+  const liveSillyChemistry = livePapers.reduce(
+    (sum, p) =>
+      sum +
+      p.subjects
+        .filter(s => normalizeCanonicalSubject(s.subjectName) === 'chemistry')
+        .reduce((a, b) => a + (b.sillyMistakes ?? 0), 0),
+    0
+  );
+  const liveSillyMaths = livePapers.reduce(
+    (sum, p) =>
+      sum +
+      p.subjects
+        .filter(s => normalizeCanonicalSubject(s.subjectName) === 'maths')
+        .reduce((a, b) => a + (b.sillyMistakes ?? 0), 0),
+    0
   );
 
   const target = parseFloat(targetScore) || 0;
@@ -406,6 +469,11 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
       totalUnattempted: liveUnattempted,
       totalQuestions: liveTotalQ,
       marksLostToNegative: liveMarksLost,
+      totalSillyMistakes: liveSillyCount > 0 ? liveSillyCount : undefined,
+      sillyMarksLost: liveSillyMarksLost > 0 ? liveSillyMarksLost : undefined,
+      sillyPhysics: liveSillyPhysics > 0 ? liveSillyPhysics : undefined,
+      sillyChemistry: liveSillyChemistry > 0 ? liveSillyChemistry : undefined,
+      sillyMaths: liveSillyMaths > 0 ? liveSillyMaths : undefined,
       percentile: percentile ? parseFloat(percentile) : undefined,
       targetScore: target > 0 ? target : undefined,
       targetAchieved: achieved,
@@ -898,9 +966,11 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
                         correct: '',
                         incorrect: '',
                         unattempted: String(s.numQuestions),
+                        sillyMistakes: '',
                       };
                       const cVal = Math.max(0, parseInt(inp.correct) || 0);
                       const wVal = Math.max(0, parseInt(inp.incorrect) || 0);
+                      const sillyVal = Math.max(0, parseInt(inp.sillyMistakes) || 0);
                       const uVal =
                         inp.unattempted !== ''
                           ? Math.max(0, parseInt(inp.unattempted) || 0)
@@ -913,10 +983,14 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
                         wVal,
                         uVal,
                         template,
-                        subjTime
+                        subjTime,
+                        sillyVal
                       );
 
-                      const handleCountChange = (field: 'correct' | 'incorrect' | 'unattempted', rawVal: string) => {
+                      const handleCountChange = (
+                        field: 'correct' | 'incorrect' | 'unattempted' | 'sillyMistakes',
+                        rawVal: string
+                      ) => {
                         const np = [...paperInputs];
                         np[pi] = [...(np[pi] ?? [])];
                         const nextItem = { ...inp, [field]: rawVal };
@@ -932,7 +1006,7 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
                       return (
                         <div
                           key={s.id}
-                          className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end"
+                          className="grid grid-cols-2 md:grid-cols-12 gap-2 items-end"
                           style={{
                             padding: '10px 12px',
                             background: 'var(--bg-surface)',
@@ -940,7 +1014,7 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
                             border: '1px solid var(--border-subtle)',
                           }}
                         >
-                          <div className="md:col-span-3">
+                          <div className="col-span-2 md:col-span-3">
                             <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
                               {s.name}
                             </p>
@@ -991,7 +1065,31 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
                               max={s.numQuestions}
                             />
                           </div>
-                          <div className="md:col-span-3" style={{ textAlign: 'right' }}>
+                          <div className="md:col-span-1">
+                            <label
+                              className="field-label"
+                              style={{ marginBottom: 3, color: 'var(--warning)' }}
+                              title="Count of careless/silly errors in this subject"
+                            >
+                              Silly Q
+                            </label>
+                            <input
+                              type="number"
+                              className="field tabular-num"
+                              style={{
+                                padding: '7px 8px',
+                                fontSize: 13,
+                                borderColor:
+                                  sillyVal > 0 ? 'rgba(245, 158, 11, 0.45)' : 'var(--border-subtle)',
+                              }}
+                              value={inp.sillyMistakes}
+                              onChange={e => handleCountChange('sillyMistakes', e.target.value)}
+                              placeholder="0"
+                              min={0}
+                              max={s.numQuestions}
+                            />
+                          </div>
+                          <div className="md:col-span-2" style={{ textAlign: 'right' }}>
                             <p
                               className="tabular-num"
                               style={{
@@ -1005,8 +1103,9 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
                                 / {sc.maxScore.toFixed(0)}
                               </span>
                             </p>
-                            <p className="tabular-num" style={{ fontSize: 10.5, color: 'var(--text-tertiary)' }}>
+                            <p className="tabular-num" style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
                               {sc.accuracy.toFixed(0)}% acc · -{(sc.marksLostToNegative ?? 0).toFixed(1)} neg
+                              {sillyVal > 0 ? ` · ${sillyVal} silly (-${sc.sillyMarksLost}m)` : ''}
                             </p>
                           </div>
                         </div>
@@ -1022,6 +1121,7 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
                         correct: '',
                         incorrect: '',
                         unattempted: String(s.numQuestions),
+                        sillyMistakes: '',
                       };
                       const posScore = parseFloat(inp.marksObtained) || 0;
                       const negMarks = Math.abs(parseFloat(inp.negativeMarks) || 0);
@@ -1030,6 +1130,7 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
                       const correct = Math.max(0, parseInt(inp.correct) || 0);
                       const wrong = Math.max(0, parseInt(inp.incorrect) || 0);
                       const unattempted = Math.max(0, parseInt(inp.unattempted) || 0);
+                      const silly = Math.max(0, parseInt(inp.sillyMistakes) || 0);
                       const sumQ = correct + wrong + unattempted;
                       const mismatch =
                         (inp.correct !== '' || inp.incorrect !== '') && sumQ !== s.numQuestions;
@@ -1037,7 +1138,7 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
                       return (
                         <div
                           key={s.id}
-                          className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end"
+                          className="grid grid-cols-2 md:grid-cols-12 gap-2 items-end"
                           style={{
                             padding: '10px 12px',
                             background: 'var(--bg-surface)',
@@ -1045,7 +1146,7 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
                             border: '1px solid var(--border-subtle)',
                           }}
                         >
-                          <div className="md:col-span-3">
+                          <div className="col-span-2 md:col-span-2">
                             <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
                               {s.name}
                             </p>
@@ -1155,6 +1256,33 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
                               min={0}
                             />
                           </div>
+                          <div className="md:col-span-1">
+                            <label
+                              className="field-label"
+                              style={{ marginBottom: 3, color: 'var(--warning)' }}
+                            >
+                              Silly Q
+                            </label>
+                            <input
+                              type="number"
+                              className="field tabular-num"
+                              style={{
+                                padding: '7px 8px',
+                                fontSize: 13,
+                                borderColor:
+                                  silly > 0 ? 'rgba(245, 158, 11, 0.45)' : 'var(--border-subtle)',
+                              }}
+                              value={inp.sillyMistakes}
+                              onChange={e => {
+                                const np = [...manualInputs];
+                                np[pi] = [...(np[pi] ?? [])];
+                                np[pi][si] = { ...inp, sillyMistakes: e.target.value };
+                                setManualInputs(np);
+                              }}
+                              placeholder="0"
+                              min={0}
+                            />
+                          </div>
                           <div className="md:col-span-2" style={{ textAlign: 'right' }}>
                             <p
                               className="tabular-num"
@@ -1168,6 +1296,7 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
                             </p>
                             <p className="tabular-num" style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
                               of {maxScore.toFixed(0)}
+                              {silly > 0 ? ` · ${silly} silly` : ''}
                             </p>
                             {mismatch && (
                               <p style={{ fontSize: 9.5, color: 'var(--warning)', fontWeight: 600 }}>
@@ -1180,21 +1309,54 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
                     })}
                   </div>
                 ) : (
-                  <div>
-                    <label className="field-label">Total Marks for Paper {pi + 1}</label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      className="field tabular-num"
-                      style={{ fontSize: 18, fontWeight: 700 }}
-                      value={directMarks[pi] ?? ''}
-                      onChange={e => {
-                        const nd = [...directMarks];
-                        nd[pi] = e.target.value;
-                        setDirectMarks(nd);
-                      }}
-                      placeholder={`Max: ${paper.reduce((a, s) => a + subjectMaxScore(s, template), 0)}`}
-                    />
+                  <div className="space-y-3">
+                    <div>
+                      <label className="field-label">Total Marks for Paper {pi + 1}</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        className="field tabular-num"
+                        style={{ fontSize: 18, fontWeight: 700 }}
+                        value={directMarks[pi] ?? ''}
+                        onChange={e => {
+                          const nd = [...directMarks];
+                          nd[pi] = e.target.value;
+                          setDirectMarks(nd);
+                        }}
+                        placeholder={`Max: ${paper.reduce((a, s) => a + subjectMaxScore(s, template), 0)}`}
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2.5">
+                      {paper.map((s, si) => {
+                        const inp = paperInputs[pi]?.[si] ?? {
+                          correct: '',
+                          incorrect: '',
+                          unattempted: String(s.numQuestions),
+                          sillyMistakes: '',
+                        };
+                        return (
+                          <div key={s.id}>
+                            <label className="field-label" style={{ color: 'var(--warning)' }}>
+                              {s.name} Silly Mistakes
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              max={s.numQuestions}
+                              className="field tabular-num"
+                              value={inp.sillyMistakes}
+                              onChange={e => {
+                                const np = [...paperInputs];
+                                np[pi] = [...(np[pi] ?? [])];
+                                np[pi][si] = { ...inp, sillyMistakes: e.target.value };
+                                setPaperInputs(np);
+                              }}
+                              placeholder="0"
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
@@ -1205,6 +1367,11 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
                   >
                     <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
                       {template.pattern === 'dual' ? `Paper ${pi + 1} Subtotal` : 'Paper Subtotal'}
+                      {(livePapers[pi]?.totalSillyMistakes ?? 0) > 0 && (
+                        <span style={{ color: 'var(--warning)', marginLeft: 8 }} className="font-mono">
+                          · {livePapers[pi]?.totalSillyMistakes} Silly (-{livePapers[pi]?.sillyMarksLost}m)
+                        </span>
+                      )}
                     </span>
                     <span className="tabular-num" style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
                       {livePapers[pi]?.totalScore.toFixed(1)} / {livePapers[pi]?.maxScore.toFixed(0)}
@@ -1217,7 +1384,7 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
 
           {/* Live Combined Summary */}
           <div className="card" style={{ padding: 16, background: 'var(--bg-surface)' }}>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <div>
                 <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 2 }}>
                   Combined Score
@@ -1273,6 +1440,25 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
                   -{liveMarksLost.toFixed(1)}
                 </p>
               </div>
+              <div>
+                <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 2 }}>
+                  Silly Mistakes
+                </p>
+                <p
+                  className="stat-number"
+                  style={{
+                    fontSize: 22,
+                    color: liveSillyCount > 0 ? 'var(--warning)' : 'var(--text-tertiary)',
+                  }}
+                >
+                  {liveSillyCount} Q
+                </p>
+                <p className="tabular-num" style={{ fontSize: 10.5, color: 'var(--text-tertiary)' }}>
+                  {liveSillyCount > 0
+                    ? `Silly-Free: ${Math.min(liveMax, Number((liveTotal + liveSillyMarksLost).toFixed(1)))}m`
+                    : 'P:0 · C:0 · M:0'}
+                </p>
+              </div>
             </div>
             {target > 0 && (
               <div
@@ -1315,7 +1501,7 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
       {step === 4 && template && (
         <div className="space-y-4">
           <div className="card-elevated" style={{ padding: 16 }}>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
               <div>
                 <p style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Test Event</p>
                 <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)' }}>
@@ -1344,6 +1530,12 @@ export function LogTest({ templates, onSave, onCancel, editing }: LogTestProps) 
                 <p style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Marks Lost to Neg</p>
                 <p className="tabular-num" style={{ fontSize: 14, fontWeight: 700, color: 'var(--danger)' }}>
                   -{liveMarksLost.toFixed(1)} pts
+                </p>
+              </div>
+              <div>
+                <p style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Silly Mistakes (P/C/M)</p>
+                <p className="tabular-num" style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--warning)' }}>
+                  {liveSillyCount} Q ({liveSillyPhysics}/{liveSillyChemistry}/{liveSillyMaths})
                 </p>
               </div>
             </div>
